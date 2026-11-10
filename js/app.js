@@ -46,6 +46,24 @@ function toast(msg) {
   setTimeout(() => { t.classList.remove('show'); setTimeout(() => t.remove(), 300); }, 1800);
 }
 
+
+// In-page confirm (window.confirm is blocked in some embedded viewers).
+function ask(message, okLabel = 'OK') {
+  return new Promise((resolve) => {
+    const wrap = document.createElement('div');
+    wrap.className = 'modal';
+    wrap.innerHTML = `<div class="modal-box" role="dialog" aria-modal="true"><p>${esc(message)}</p><div class="row2"><button class="btn" data-r="0">Cancel</button><button class="btn primary" data-r="1">${esc(okLabel)}</button></div></div>`;
+    wrap.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-r]');
+      if (!b && e.target !== wrap) return;
+      e.stopPropagation();
+      wrap.remove();
+      resolve(!!b && b.dataset.r === '1');
+    });
+    document.body.appendChild(wrap);
+  });
+}
+
 async function saveSettings() { await db.setKV('settings', settings); }
 
 const go = (hash) => { location.hash = hash; };
@@ -644,14 +662,14 @@ const actions = {
   async noteFmt(el) { ui.noteFormat = el.dataset.v; rerender(); },
   async copyNote() {
     const text = $app.querySelector('#noteOut').innerText;
-    try { await navigator.clipboard.writeText(text); toast('Note copied'); } catch (e) { toast('Copy failed: select the text instead'); }
+    try { await navigator.clipboard.writeText(text); toast('Note copied'); } catch (e) { const r = document.createRange(); r.selectNodeContents($app.querySelector('#noteOut')); const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r); toast('Text selected: tap Copy'); }
   },
   async shareNote() {
     const text = $app.querySelector('#noteOut').innerText;
     if (navigator.share) { try { await navigator.share({ text }); } catch (e) { /* cancelled */ } } else actions.copyNote();
   },
   async reveal() {
-    if (!confirm('Reveal this wine? Make your guess first.')) return;
+    if (!(await ask('Reveal this wine? Make your guess first.', 'Reveal'))) return;
     await withWine((w) => { w.revealed = true; });
   },
   async guessResult(el) { await withWine((w, t) => { t.guessResult = el.dataset.v; }); },
@@ -665,19 +683,19 @@ const actions = {
     rerender();
   },
   async delMedia(el) {
-    if (!confirm('Delete this photo/video?')) return;
+    if (!(await ask('Delete this photo or video?', 'Delete'))) return;
     await db.del('media', el.dataset.id);
     rerender();
   },
   async deleteEvent() {
     const id = currentEventId();
-    if (!confirm('Delete this event and all its wines?')) return;
+    if (!(await ask('Delete this event and all its wines?', 'Delete'))) return;
     for (const w of await db.byIndex('wines', 'eventId', id)) await db.del('wines', w.id);
     await db.del('events', id);
     go('#/');
   },
   async deleteWine() {
-    if (!confirm('Delete this wine and its tasting?')) return;
+    if (!(await ask('Delete this wine and its tasting?', 'Delete'))) return;
     await db.del('wines', draftWine.id);
     go(`#/event/${draftWine.eventId}`);
   },
@@ -691,7 +709,7 @@ const actions = {
     a.href = URL.createObjectURL(blob); a.download = file.name; a.click();
   },
   async wipe() {
-    if (!confirm('Delete ALL events, wines, photos and settings on this device?')) return;
+    if (!(await ask('Delete all events, wines, photos and settings on this device?', 'Delete all'))) return;
     await db.clearAll(); settings = { ...DEFAULT_SETTINGS, customLexicon: [] }; go('#/'); rerender();
   },
 };
@@ -808,12 +826,12 @@ async function handleImport(el) {
   try {
     const data = JSON.parse(await f.text());
     if (data.app !== 'tasting') throw new Error('Not a tasting backup');
-    if (!confirm(`Import ${data.events.length} events and ${data.wines.length} wines? Existing items with the same id are replaced.`)) return;
+    if (!(await ask(`Import ${data.events.length} events and ${data.wines.length} wines? Items with the same id are replaced.`, 'Import'))) return;
     for (const ev of data.events) await db.put('events', ev);
     for (const w of data.wines) await db.put('wines', w);
     toast('Imported');
     rerender();
-  } catch (err) { alert('Import failed: ' + err.message); }
+  } catch (err) { toast('Import failed: ' + err.message); }
 }
 
 // ---------------------------------------------------------------- boot
