@@ -11,14 +11,6 @@ const today = () => new Date().toISOString().slice(0, 10);
 const fmtDate = (d) => { try { return new Date(d + 'T12:00:00').toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }); } catch (e) { return d; } };
 const COLOUR_LABEL = { white: 'White', rose: 'Rosé', red: 'Red' };
 const TYPE_LABEL = { still: 'Still', sparkling: 'Sparkling', fortified: 'Fortified' };
-const STEPS = [
-  { id: 'style', title: 'Style' },
-  { id: 'appearance', title: 'Appearance' },
-  { id: 'nose', title: 'Nose' },
-  { id: 'palate', title: 'Palate' },
-  { id: 'conclusions', title: 'Conclusions' },
-  { id: 'wrap', title: 'Wrap-up' },
-];
 const DEFAULT_BANDS = {
   outstanding: [[95, 100], [18.5, 20]],
   'very good': [[90, 94], [17, 18]],
@@ -27,10 +19,10 @@ const DEFAULT_BANDS = {
   poor: [[70, 79], [12, 14.5]],
   faulty: [[50, 69], [0, 11.5]],
 };
-const DEFAULT_SETTINGS = { method: 'wset', level: 'l3', structurePlus: true, scale: 100, noteFormat: 'full', customLexicon: [] };
+const DEFAULT_SETTINGS = { method: 'wset', level: 'l3', structurePlus: true, scale: 100, noteFormat: 'full', mode: 'full', customLexicon: [] };
 
 let settings = { ...DEFAULT_SETTINGS };
-const ui = { open: {}, step: {}, moreOpen: {}, eventTab: {}, standingsFilter: 'all' };
+const ui = { open: {}, unfold: {}, eventTab: {}, standingsFilter: 'all' };
 const urlCache = new Map();
 function mediaURL(m) {
   if (!urlCache.has(m.id)) urlCache.set(m.id, URL.createObjectURL(m.blob));
@@ -69,10 +61,17 @@ async function saveSettings() { await db.setKV('settings', settings); }
 const go = (hash) => { location.hash = hash; };
 
 // Debounced wine saving while tasting.
-let saveTimer;
+let saveTimer, pendingWine;
 function saveWineSoon(wine) {
   clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => db.put('wines', wine), 250);
+  pendingWine = wine;
+  saveTimer = setTimeout(flushWine, 250);
+}
+async function flushWine() {
+  clearTimeout(saveTimer);
+  const w = pendingWine;
+  pendingWine = null;
+  if (w) await db.put('wines', w);
 }
 
 function scoreToHundred(score, scale) { return scale === 20 ? score * 5 : score; }
@@ -200,9 +199,14 @@ async function viewEvent(id) {
   const tab = ui.eventTab[id] || 'wines';
   let body = '';
   if (tab === 'wines') {
-    body = wines.map((w, i) => {
+    const nextW = wines.find((w) => !(w.tasting && w.tasting.done));
+    const doneN = wines.filter((w) => w.tasting && w.tasting.done).length;
+    const hero = wines.length ? (nextW
+      ? `<a class="hero" href="#/wine/${nextW.id}"><span><span class="small">${doneN} of ${wines.length} tasted</span><b>Taste wine ${wines.indexOf(nextW) + 1}</b></span><span class="hero-arrow">›</span></a>`
+      : `<div class="hero done"><span><span class="small">All ${wines.length} tasted</span><b>See the standings</b></span><button class="hero-arrow" data-act="eventTab" data-tab="standings" aria-label="Standings">›</button></div>`) : '';
+    body = hero + wines.map((w, i) => {
       const t = w.tasting;
-      const status = !t ? 'not started' : (t.score != null && t.score !== '' ? 'done' : 'tasting');
+      const status = !t ? 'not started' : (t.done ? 'done ✓' : 'tasting');
       const thumb = !event.blind || w.revealed ? (w.labelId ? `<img class="thumb" data-media="${w.labelId}" alt="">` : '<div class="thumb ph">🍾</div>') : `<div class="thumb ph blind">${i + 1}</div>`;
       return `
         <div class="card wine-card">
@@ -211,7 +215,7 @@ async function viewEvent(id) {
             ${thumb}
             <span class="wc-main">
               <span class="wc-name">${esc(displayName(w, event, i))}</span>
-              <span class="muted small"><span class="dot dot-${w.colour || 'none'}"></span>${w.colour ? COLOUR_LABEL[w.colour] : 'style not set'}${w.type && w.type !== 'still' ? ' · ' + TYPE_LABEL[w.type] : ''} · ${status}</span>
+              <span class="muted small"><span class="dot dot-${w.colour || 'none'}"></span>${esc(styleLabel(w))} · ${status}</span>
             </span>
             <span class="wc-score">${t && t.score != null && t.score !== '' ? esc(formatScore(t.score, event.scale)) : ''}</span>
           </a>
@@ -220,8 +224,9 @@ async function viewEvent(id) {
             <button data-act="moveWine" data-id="${w.id}" data-dir="1" ${i === wines.length - 1 ? 'disabled' : ''} aria-label="Move down">▼</button>
           </span>
         </div>`;
-    }).join('') || `<div class="empty"><p><b>No wines yet.</b></p><p class="muted">Add them in the order you'll taste them.</p></div>`;
-    body += `<a class="fab" href="#/event/${id}/add">+ Add wine</a>`;
+    }).join('') || `<div class="empty"><p><b>No wines yet.</b></p><p class="muted">Tap a style below to add wine 1. Add them in the order you'll taste them.</p></div>`;
+    body += `<div class="card quick-add"><div class="srow-label">Quick add <span class="muted small">· tap a style, wine ${wines.length + 1} is added</span></div>${styleTiles({}, 'quickAdd')}<div class="muted tiny">Label photo and details can be added later${event.blind ? ' or at the reveal' : ''}.</div></div>`;
+    body += `<a class="fab" href="#/event/${id}/add">+ Add with label</a>`;
   } else if (tab === 'standings') {
     body = standingsList(wines.map((w, i) => ({ wine: w, name: displayName(w, event, i) })), () => event.scale);
   } else {
@@ -261,13 +266,6 @@ function wineDetailFields(w) {
     <label>Price / notes<input name="price" value="${attr(w.price)}"></label>`;
 }
 
-function styleChips(w) {
-  return `
-    <div class="field-label">Colour</div>
-    <div class="chips big">${['white', 'rose', 'red'].map((c) => `<button type="button" class="chip ${w.colour === c ? 'on' : ''}" data-act="setStyle" data-k="colour" data-v="${c}"><span class="dot dot-${c}"></span>${COLOUR_LABEL[c]}</button>`).join('')}</div>
-    <div class="field-label">Type</div>
-    <div class="chips big">${['still', 'sparkling', 'fortified'].map((c) => `<button type="button" class="chip ${(w.type || 'still') === c ? 'on' : ''}" data-act="setStyle" data-k="type" data-v="${c}">${TYPE_LABEL[c]}</button>`).join('')}</div>`;
-}
 
 let draftWine = null;
 async function viewAddWine(eventId, wineId) {
@@ -286,96 +284,285 @@ async function viewAddWine(eventId, wineId) {
       </div>
       ${hide ? `<p class="note-box">Blind event: the label photo is stored but blurred, and details stay hidden until you tap <b>Reveal</b> after guessing. You can leave the details empty and fill them in at the reveal.</p>`
         : `<p class="muted small">AI label reading is planned; for now type the details from the label.</p>${wineDetailFields(w)}`}
-      ${hide ? '' : styleChips(w)}
+      <div class="field-label">Style</div>${styleTiles(w)}
       <button class="btn primary" type="submit">${editing ? 'Save' : 'Add wine'}</button>
       ${editing ? '<button class="btn danger" type="button" data-act="deleteWine">Delete wine</button>' : ''}
     </form>
   `, { title: editing ? 'Wine details' : 'Add wine', back: editing ? `#/wine/${wineId}` : `#/event/${eventId}` });
 }
 
-// ---------- tasting
+// ---------- tasting sheet (one page: Look, Smell, Taste, Verdict)
 function ensureTasting(w) {
-  if (!w.tasting) w.tasting = { methodId: settings.method, levelId: settings.level, values: {}, blic: [] };
+  if (!w.tasting) w.tasting = { methodId: settings.method, levelId: settings.level, values: {}, blic: [], mode: settings.mode || 'full' };
   w.tasting.values = w.tasting.values || {};
+  if (!w.tasting.mode) w.tasting.mode = 'full';
   return w.tasting;
 }
 
-function renderField(f, t, w, level) {
+// Style tiles used when adding a wine and on the sheet.
+const STYLE_TILES = [
+  { k: 'white', label: 'White', colour: 'white', type: 'still' },
+  { k: 'rose', label: 'Rosé', colour: 'rose', type: 'still' },
+  { k: 'red', label: 'Red', colour: 'red', type: 'still' },
+  { k: 'sparkling', label: 'Sparkling', colour: 'white', type: 'sparkling' },
+  { k: 'fortified', label: 'Fortified', colour: 'red', type: 'fortified' },
+  { k: 'sweet', label: 'Sweet', colour: 'white', type: 'still', sweet: true },
+];
+function styleKey(w) {
+  if (!w.colour) return '';
+  if (w.sweet) return 'sweet';
+  if (w.type === 'sparkling') return 'sparkling';
+  if (w.type === 'fortified') return 'fortified';
+  return w.colour;
+}
+function styleTiles(w, act = 'styleTile') {
+  const cur = styleKey(w);
+  return `<div class="tiles6">${STYLE_TILES.map((s) => `<button type="button" class="tile tile-${s.k} ${cur === s.k ? 'on' : ''}" data-act="${act}" data-v="${s.k}">${s.label}</button>`).join('')}</div>`;
+}
+function styleLabel(w) {
+  if (!w.colour) return 'style not set';
+  return [COLOUR_LABEL[w.colour], w.type && w.type !== 'still' ? TYPE_LABEL[w.type].toLowerCase() : null, w.sweet ? 'sweet' : null].filter(Boolean).join(' · ');
+}
+
+const SHORT = {
+  'medium(-)': 'med–', 'medium(+)': 'med+', medium: 'med', pronounced: 'pron.', 'hazy (faulty?)': 'hazy', 'unclean (faulty?)': 'unclean',
+  'fully developed': 'developed', 'tired/past its best': 'tired', 'medium-dry': 'm-dry', 'medium-sweet': 'm-sweet',
+  'can drink now, but has potential for ageing': 'now, will age', 'drink now: not suitable for ageing or further ageing': 'drink now',
+  'suitable for bottle ageing': 'will age', 'not suitable for bottle ageing': 'drink now',
+};
+const short = (o) => SHORT[o] || o;
+
+const SECTIONS = [
+  { id: 'look', sat: 'appearance', title: 'Look' },
+  { id: 'smell', sat: 'nose', title: 'Smell' },
+  { id: 'taste', sat: 'palate', title: 'Taste' },
+  { id: 'verdict', sat: 'conclusions', title: 'Verdict' },
+];
+const QUICK_FIELDS = { appearance: ['colour', 'intensityA'], nose: ['aromas'], palate: ['sweetness', 'acidity', 'tannin', 'body', 'finish'], conclusions: ['quality'] };
+
+// Fields shown in a section for this wine, tasting mode and settings.
+function sheetFields(level, sec, w, t) {
+  let fs = fieldsFor(level, sec.sat, w, settings, t);
+  if (t.mode === 'quick') fs = fs.filter((f) => QUICK_FIELDS[sec.sat].includes(f.id));
+  return fs;
+}
+
+// Palate flavours default to the nose until the taster edits them.
+function flavoursOf(t) { return t.values.flavours ?? (t.values.aromas || []).map((a) => ({ ...a })); }
+function derived(t) { return { ...t, values: { ...t.values, flavours: flavoursOf(t) } }; }
+
+function isFilled(f, t) {
+  const v = f.id === 'flavours' ? flavoursOf(t) : t.values[f.id];
+  return Array.isArray(v) ? v.length > 0 : v !== undefined && v !== null && v !== '';
+}
+// Required = the one-of-many lines and the aroma/flavour lexicons (not optional extras).
+const isRequired = (f) => !f.plus && (f.type === 'single' || f.type === 'lexicon');
+
+function sectionProgress(level, sec, w, t) {
+  const fs = sheetFields(level, sec, w, t).filter(isRequired);
+  let total = fs.length, filled = fs.filter((f) => isFilled(f, t)).length;
+  if (sec.id === 'look') { total += 1; if (w.colour) filled += 1; }
+  if (sec.id === 'verdict') { total += 1; if (t.score != null && t.score !== '') filled += 1; }
+  return { filled, total, done: total > 0 && filled === total };
+}
+
+function sectionSummary(level, sec, w, t) {
+  const fs = sheetFields(level, sec, w, t);
+  const parts = [];
+  if (sec.id === 'look') parts.push(styleLabel(w));
+  for (const f of fs) {
+    const v = f.id === 'flavours' ? flavoursOf(t) : t.values[f.id];
+    if (Array.isArray(v)) { if (v.length) parts.push(v.map((x) => (typeof x === 'string' ? x : x.d)).slice(0, 5).join(', ')); }
+    else if (v && f.type !== 'text') parts.push(f.scale ? `${f.label.toLowerCase()} ${v}` : v);
+  }
+  if (sec.id === 'verdict' && t.score != null && t.score !== '') parts.push(`${t.score} pts`);
+  return parts.join(' · ');
+}
+
+function segRow(f, t, opts) {
   const val = t.values[f.id];
-  const plus = f.plus ? '<span class="plus-tag">Structure+</span>' : '';
-  const help = f.help ? `<div class="muted small help">${esc(f.help)}</div>` : '';
+  const cols = opts.length > 6 ? 3 : opts.length;
+  return `<div class="srow" data-field="${f.id}" data-empty="${val ? 0 : 1}">
+      <div class="srow-label">${esc(f.label)}${f.plus ? ' <span class="plus-tag">S+</span>' : ''}</div>
+      <div class="seg-bar" style="grid-template-columns: repeat(${cols}, minmax(0, 1fr))">${opts.map((o) => `<button class="${val === o ? 'on' : ''}" data-act="pick" data-f="${f.id}" data-v="${attr(o)}" aria-label="${attr(o)}">${esc(short(o))}</button>`).join('')}</div>
+    </div>`;
+}
+
+function multiRow(f, t) {
+  const arr = t.values[f.id] || [];
+  return `<div class="srow" data-field="${f.id}">
+      <div class="srow-label">${esc(f.label)} <span class="muted small">· optional${f.plus ? ', Structure+' : ''}</span></div>
+      <div class="chips">${f.options.map((o) => `<button class="chip ${arr.includes(o) ? 'on' : ''}" data-act="toggle" data-f="${f.id}" data-v="${attr(o)}">${esc(o)}</button>`).join('')}</div>
+    </div>`;
+}
+
+function textRow(f, t) {
+  return `<label class="block-label">${esc(f.label)}<textarea rows="2" data-text="${f.id}" placeholder="${attr(f.placeholder || '')}">${esc(t.values[f.id] || '')}</textarea></label>`;
+}
+
+// The structure grid: every scale on one compact grid, columns line up.
+function structureGrid(fields, t, level) {
+  const five = level.id !== 'l2';
+  const cols = five ? 5 : 3;
+  const heads = five ? ['low', 'med–', 'med', 'med+', 'high'] : ['low', 'med', 'high'];
+  const rows = fields.map((f) => {
+    const val = t.values[f.id];
+    const spans = f.options.length === cols ? f.options.map(() => 1) : (f.options.length === 3 && cols === 5 ? [2, 1, 2] : f.options.map(() => 1));
+    return `<div class="g-label" data-field="${f.id}" data-empty="${val ? 0 : 1}"><b>${esc(f.label.replace('Flavour intensity', 'Flavour int.').replace('Tannin level', 'Tannin'))}</b><span>${val ? esc(val) : ''}</span></div>
+      ${f.options.map((o, i) => `<button class="g-cell ${val === o ? 'on' : ''}" style="grid-column: span ${spans[i]}" data-act="pick" data-f="${f.id}" data-v="${attr(o)}" aria-label="${attr(f.label + ': ' + o)}"></button>`).join('')}`;
+  }).join('');
+  return `<div class="sgrid" style="grid-template-columns: 96px repeat(${cols}, minmax(0, 1fr))">
+      <span></span>${heads.map((h) => `<span class="g-head">${h}</span>`).join('')}
+      ${rows}
+    </div>`;
+}
+
+// Quick picks: the descriptors most typical for this style.
+const QUICK_PICKS = {
+  red: ['blackcurrant', 'black cherry', 'raspberry', 'red cherry', 'black plum', 'blackberry', 'black pepper', 'vanilla', 'cedar', 'smoke', 'leather', 'earth', 'tobacco', 'mushroom', 'violet'],
+  white: ['lemon', 'lime', 'grapefruit', 'apple', 'pear', 'peach', 'apricot', 'pineapple', 'passion fruit', 'grass', 'blossom', 'butter', 'vanilla', 'honey', 'wet stones'],
+  rose: ['strawberry', 'raspberry', 'red cherry', 'redcurrant', 'cranberry', 'peach', 'grapefruit', 'lemon', 'blossom', 'rose', 'wet stones', 'candy'],
+  sparkling: ['lemon', 'apple', 'pear', 'peach', 'blossom', 'biscuit', 'brioche', 'bread', 'toast', 'pastry', 'almond', 'honey'],
+  fortified: ['blackberry', 'black plum', 'raisin', 'prune', 'fig', 'chocolate', 'coffee', 'caramel', 'toffee', 'walnut', 'hazelnut', 'almond'],
+};
+function findCluster(lexicon, d, colour) {
+  const hits = lexicon.filter((c) => c.d.includes(d));
+  return hits.find((c) => c.colours.includes(colour)) || hits[0];
+}
+function quickPicks(w, level) {
+  const list = w.type === 'sparkling' ? QUICK_PICKS.sparkling : w.type === 'fortified' ? QUICK_PICKS.fortified : QUICK_PICKS[w.colour || 'red'];
+  const out = [];
+  for (const d of list) { const c = findCluster(level.lexicon, d, w.colour || 'red'); if (c) out.push({ c: c.id, d }); }
+  for (const d of (settings.customLexicon || []).slice(-3)) out.push({ c: 'custom', d });
+  return out;
+}
+
+function aromaPicker(f, t, w, level) {
+  const sel = f.id === 'flavours' ? flavoursOf(t) : (t.values[f.id] || []);
+  const key = w.id + f.id;
+  const has = (c, d) => sel.some((s) => s.d === d && (s.c === c || c === 'custom' || s.c === 'custom'));
+  const colour = w.colour || 'red';
+  const wheelOpen = ui.open['wheel' + key];
+  const clusters = [...level.lexicon].sort((a, b) => (b.colours.includes(colour) ? 1 : 0) - (a.colours.includes(colour) ? 1 : 0));
+  const wheel = wheelOpen ? ['primary', 'secondary', 'tertiary'].map((layer) => {
+    const items = clusters.filter((c) => c.layer === layer);
+    return `<div class="layer-title">${layer}</div><div class="wheel">${items.map((c) => `
+        <div class="wheel-cl wl-${layer}"><div class="wheel-name">${esc(c.name)}</div>
+          <div class="chips">${c.d.map((d) => `<button class="chip ${has(c.id, d) ? 'on' : ''}" data-act="descr" data-f="${f.id}" data-c="${c.id}" data-v="${attr(d)}">${esc(d)}</button>`).join('')}</div></div>`).join('')}</div>`;
+  }).join('') : '';
+  const picks = quickPicks(w, level);
+  return `<div class="srow" data-field="${f.id}" data-empty="${sel.length ? 0 : 1}">
+      <div class="srow-label">${esc(f.label.replace(' characteristics', ''))} <span class="muted small">· ${sel.length ? `${sel.length} picked` : 'pick any'}${f.id === 'flavours' && t.values.flavours === undefined && sel.length ? ', copied from the nose' : ''}</span></div>
+      ${sel.length ? `<div class="chips picked">${sel.map((s) => `<button class="chip on" data-act="descr" data-f="${f.id}" data-c="${s.c}" data-v="${attr(s.d)}" aria-label="Remove ${attr(s.d)}">${esc(s.d)} ✕</button>`).join('')}</div>` : ''}
+      <div class="search-wrap">
+        <input class="aroma-search" type="search" placeholder="Search aromas… e.g. cass, pepper, petrol" data-aroma-search="${f.id}" autocomplete="off" enterkeyhint="done">
+        <div class="search-results" data-results="${f.id}"></div>
+      </div>
+      ${!wheelOpen ? `<div class="muted tiny qp-title">Quick picks for ${esc(styleLabel(w).toLowerCase())}</div>
+      <div class="qpicks">${picks.map((p) => `<button class="qp ${has(p.c, p.d) ? 'on' : ''}" data-act="descr" data-f="${f.id}" data-c="${p.c}" data-v="${attr(p.d)}">${esc(p.d)}</button>`).join('')}</div>` : ''}
+      <button class="link wheel-btn" data-act="wheel" data-k="${key}">${wheelOpen ? '‹ Back to quick picks' : `Open aroma wheel (all ${level.lexicon.length} clusters) ›`}</button>
+      ${wheel}
+    </div>`;
+}
+
+// Live search across the level's lexicon and my own descriptors.
+function searchResults(fid, q, w, t, level) {
+  q = q.trim().toLowerCase();
+  if (q.length < 2) return '';
+  const alias = { cass: 'blackcurrant', cassis: 'blackcurrant', kero: 'petrol', gas: 'petrol', oak: 'vanilla', minerality: 'wet stones', mineral: 'wet stones' };
+  const seen = new Set();
+  const hits = [];
+  for (const c of level.lexicon) for (const d of c.d) {
+    if ((d.includes(q) || c.name.toLowerCase().includes(q) || (alias[q] && d === alias[q]) || Object.keys(alias).some((a) => a.startsWith(q) && alias[a] === d)) && !seen.has(d)) { seen.add(d); hits.push({ c: c.id, d, cl: c.name }); }
+  }
+  for (const d of settings.customLexicon || []) if (d.includes(q) && !seen.has(d)) { seen.add(d); hits.push({ c: 'custom', d, cl: 'mine' }); }
+  const exact = hits.some((h) => h.d === q);
+  return hits.slice(0, 8).map((h) => `<button class="sr" data-act="descr" data-f="${fid}" data-c="${h.c}" data-v="${attr(h.d)}"><b>${esc(h.d)}</b><span>${esc(h.cl)}</span></button>`).join('')
+    + (exact ? '' : `<button class="sr sr-add" data-act="addOwn" data-f="${fid}" data-v="${attr(q)}"><b>+ Add “${esc(q)}”</b><span>to my descriptors</span></button>`);
+}
+
+function renderSection(sec, level, w, t, event, idx, wines) {
+  const prog = sectionProgress(level, sec, w, t);
+  const key = w.id + sec.id;
+  const folded = prog.done && !ui.unfold[key];
+  if (folded) {
+    return `<button class="sec folded" id="sec-${sec.id}" data-act="unfold" data-k="${key}">
+        <span class="sec-dot done"></span>
+        <span class="sec-sum"><span class="sec-title ok">${sec.title.toUpperCase()} ✓</span><span>${esc(sectionSummary(level, sec, w, t))}</span></span>
+        <span class="muted small">Edit</span>
+      </button>`;
+  }
+  const fs = sheetFields(level, sec, w, t);
+  let body = '';
+  if (sec.id === 'look') {
+    body += `<div class="srow" data-field="style" data-empty="${w.colour ? 0 : 1}"><div class="srow-label">Style</div>${styleTiles(w)}</div>`;
+    if (w.colour && w.colour !== 'red') body += `<label class="switch-row small-switch"><span>Show tannin <span class="muted small">(orange / skin-contact)</span></span><input type="checkbox" data-act-change="showTannin" ${t.showTannin ? 'checked' : ''}><i></i></label>`;
+  }
+  const plusFields = fs.filter((f) => f.plus);
+  const mainFields = fs.filter((f) => !f.plus);
+  if (sec.id === 'taste') {
+    const gridFields = mainFields.filter((f) => f.type === 'single' && f.scale && f.id !== 'sweetness');
+    const sweet = mainFields.find((f) => f.id === 'sweetness');
+    if (sweet) body += segRow(sweet, t, sweet.options);
+    if (gridFields.length) body += `<div class="srow-label">Structure <span class="muted small">· one tap per row</span></div>${structureGrid(gridFields, t, level)}`;
+    for (const f of mainFields.filter((x) => !gridFields.includes(x) && x !== sweet)) body += renderSheetField(f, t, w, level);
+  } else if (sec.id === 'verdict') {
+    body += verdictBody(mainFields, t, w, level, event);
+  } else {
+    for (const f of mainFields) body += renderSheetField(f, t, w, level);
+  }
+  if (plusFields.length) {
+    const open = ui.open['plus' + key] || plusFields.some((f) => isFilled(f, t));
+    body += open ? `<div class="plus-box"><div class="srow-label">Structure+ <span class="muted small">· Beyond Flavour, optional</span></div>${plusFields.map((f) => renderSheetField(f, t, w, level)).join('')}</div>`
+      : `<button class="plus-toggle" data-act="plusOpen" data-k="${key}"><span><b>Structure+</b> <span class="muted small">${plusFields.map((f) => f.label.toLowerCase()).slice(0, 2).join(', ')}…</span></span><span class="link">Show ›</span></button>`;
+  }
+  const foldBtn = prog.done ? `<button class="link" data-act="fold" data-k="${key}">Done ▴</button>` : `<span class="muted small">${prog.filled}/${prog.total}</span>`;
+  return `<section class="sec open" id="sec-${sec.id}">
+      <div class="sec-head"><span class="sec-title">${sec.title.toUpperCase()}</span>${foldBtn}</div>
+      ${body}
+    </section>`;
+}
+
+function renderSheetField(f, t, w, level) {
   if (f.type === 'single') {
-    const opts = f.byColour ? (f.byColour[w.colour] || []) : f.options;
-    if (f.byColour && !w.colour) return `<div class="field"><div class="field-label">${esc(f.label)}</div><p class="muted small">Pick a colour on the Style step first.</p></div>`;
-    return `<div class="field"><div class="field-label">${esc(f.label)} ${plus}</div>${help}
-      <div class="chips ${f.scale ? 'scale' : ''}">${opts.map((o) => `<button class="chip ${val === o ? 'on' : ''}" data-act="pick" data-f="${f.id}" data-v="${attr(o)}">${esc(o)}</button>`).join('')}</div></div>`;
+    if (f.byColour) {
+      if (!w.colour) return '';
+      return segRow(f, t, f.byColour[w.colour] || []);
+    }
+    return segRow(f, t, f.options);
   }
-  if (f.type === 'multi') {
-    const arr = val || [];
-    return `<div class="field"><div class="field-label">${esc(f.label)} ${plus}<span class="muted small"> · any</span></div>${help}
-      <div class="chips">${f.options.map((o) => `<button class="chip ${arr.includes(o) ? 'on' : ''}" data-act="toggle" data-f="${f.id}" data-v="${attr(o)}">${esc(o)}</button>`).join('')}</div></div>`;
-  }
-  if (f.type === 'text') {
-    return `<label class="block-label">${esc(f.label)}<textarea rows="2" data-text="${f.id}" placeholder="${attr(f.placeholder || '')}">${esc(val || '')}</textarea></label>`;
-  }
-  if (f.type === 'lexicon') return renderLexicon(f, t, w, level);
+  if (f.type === 'multi') return multiRow(f, t);
+  if (f.type === 'text') return textRow(f, t);
+  if (f.type === 'lexicon') return aromaPicker(f, t, w, level);
   return '';
 }
 
-function renderLexicon(f, t, w, level) {
-  const sel = t.values[f.id] || [];
-  const colour = w.colour || 'red';
-  const key = w.id + f.id;
-  const clusters = level.lexicon;
-  const main = clusters.filter((c) => c.colours.includes(colour));
-  const more = clusters.filter((c) => !c.colours.includes(colour));
-  const cl = (c) => {
-    const n = sel.filter((s) => s.c === c.id).length;
-    const open = ui.open[key + c.id];
-    return `
-      <div class="cluster ${open ? 'open' : ''} ${n ? 'has' : ''}">
-        <button class="cl-head" data-act="cluster" data-k="${key + c.id}"><span>${esc(c.name)}</span>${n ? `<span class="count">${n}</span>` : ''}<span class="chev">${open ? '▾' : '▸'}</span></button>
-        ${open ? `<div class="chips">${c.d.map((d) => `<button class="chip ${sel.some((s) => s.c === c.id && s.d === d) ? 'on' : ''}" data-act="descr" data-f="${f.id}" data-c="${c.id}" data-v="${attr(d)}">${esc(d)}</button>`).join('')}</div>` : ''}
-      </div>`;
-  };
-  const byLayer = (list) => ['primary', 'secondary', 'tertiary'].map((layer) => {
-    const items = list.filter((c) => c.layer === layer);
-    return items.length ? `<div class="layer-title">${layer}</div>${items.map(cl).join('')}` : '';
-  }).join('');
-  const custom = sel.filter((s) => s.c === 'custom');
-  const myLex = settings.customLexicon || [];
-  const copyBtn = f.copyFrom ? `<button class="btn small-btn" data-act="copyNose" data-f="${f.id}">Copy from nose</button>` : '';
-  return `
-    <div class="field lex">
-      <div class="field-label">${esc(f.label)} <span class="muted small">· tap a cluster</span></div>
-      ${copyBtn}
-      ${sel.length ? `<div class="selected-line">${sel.map((s) => `<button class="chip on" data-act="descr" data-f="${f.id}" data-c="${s.c}" data-v="${attr(s.d)}">${esc(s.d)} ✕</button>`).join('')}</div>` : ''}
-      ${byLayer(main)}
-      ${more.length ? `<button class="more-btn" data-act="more" data-k="${key}">${ui.moreOpen[key] ? '▾' : '▸'} More clusters (${more.length})</button>${ui.moreOpen[key] ? byLayer(more) : ''}` : ''}
-      <div class="layer-title">my descriptors</div>
-      <div class="chips">
-        ${myLex.map((d) => `<button class="chip ${custom.some((s) => s.d === d) ? 'on' : ''}" data-act="descr" data-f="${f.id}" data-c="custom" data-v="${attr(d)}">${esc(d)}</button>`).join('')}
-        <span class="add-own"><input placeholder="+ Add your own" data-addown="${f.id}" enterkeyhint="done"><button data-act="addOwn" data-f="${f.id}">Add</button></span>
-      </div>
+function verdictBody(fields, t, w, level, event) {
+  const scale = event.scale;
+  const quality = fields.find((f) => f.id === 'quality');
+  let out = '';
+  if (quality && quality.blic) {
+    const sel = t.blic || [];
+    out += `<div class="srow"><div class="srow-label">Does it have…</div>
+      <div class="seg-bar blic-bar" style="grid-template-columns: repeat(4, minmax(0, 1fr))">${[['B', 'Balance'], ['L', 'Length'], ['I', 'Intensity'], ['C', 'Complexity']].map(([k, l]) => `<button class="${sel.includes(k) ? 'on' : ''}" data-act="blic" data-v="${k}">${l}</button>`).join('')}</div></div>`;
+  }
+  if (quality) {
+    const n = (t.blic || []).length;
+    const sugg = quality.blic && n ? ['poor', 'acceptable', 'good', 'very good', 'outstanding'][n] : null;
+    const val = t.values.quality;
+    out += `<div class="srow" data-field="quality" data-empty="${val ? 0 : 1}"><div class="srow-label">${esc(quality.label)}${sugg ? ` <span class="muted small">· BLIC suggests ${sugg}</span>` : ''}</div>
+      <div class="seg-bar" style="grid-template-columns: repeat(3, minmax(0, 1fr))">${quality.options.map((o) => `<button class="${val === o ? 'on' : ''} ${sugg === o && val !== o ? 'sugg' : ''}" data-act="pick" data-f="quality" data-v="${attr(o)}">${esc(o)}</button>`).join('')}</div></div>`;
+  }
+  const band = bandFor(t.values.quality, scale);
+  const min = scale === 20 ? 0 : 50, max = scale === 20 ? 20 : 100, stepv = scale === 20 ? 0.5 : 1;
+  const has = t.score != null && t.score !== '';
+  out += `<div class="srow" data-field="score" data-empty="${has ? 0 : 1}">
+      <div class="score-line"><span class="srow-label">Score${band ? ` <span class="muted small">· ${esc(t.values.quality)} = ${band[0]}–${band[1]}</span>` : ''}</span>
+        <span class="score-big"><input type="number" inputmode="decimal" min="${min}" max="${max}" step="${stepv}" value="${attr(has ? t.score : '')}" data-score placeholder="–" aria-label="Score"><span>/${scale}</span></span></div>
+      <input type="range" class="score-range" min="${min}" max="${max}" step="${stepv}" value="${attr(has ? t.score : (band ? band[0] : (scale === 20 ? 16 : 88)))}" data-score-range aria-label="Score slider">
     </div>`;
-}
-
-function blicHelper(t) {
-  const sel = t.blic || [];
-  const n = sel.length;
-  const suggestion = ['poor', 'acceptable', 'good', 'very good', 'outstanding'][n];
-  return `
-    <div class="blic">
-      <div class="field-label">BLIC helper <span class="muted small">· tick what this wine has</span></div>
-      <div class="chips">${[['B', 'Balance'], ['L', 'Length'], ['I', 'Intensity'], ['C', 'Complexity']].map(([k, l]) => `<button class="chip ${sel.includes(k) ? 'on' : ''}" data-act="blic" data-v="${k}">${l}</button>`).join('')}</div>
-      <div class="muted small">Suggests: <b>${suggestion}</b>${t.values.quality && t.values.quality !== suggestion ? ` (you picked ${esc(t.values.quality)}, that's fine)` : ''} <button class="link" data-act="pick" data-f="quality" data-v="${suggestion}">use it</button></div>
-    </div>`;
-}
-
-function stepSummary(level, sectionId, w, t) {
-  const fs = fieldsFor(level, sectionId, w, settings, t);
-  const filled = fs.filter((f) => { const v = t.values[f.id]; return Array.isArray(v) ? v.length : v; }).length;
-  return { filled, total: fs.length };
+  for (const f of fields.filter((x) => x.id !== 'quality')) out += renderSheetField(f, t, w, level);
+  return out;
 }
 
 async function viewWine(id) {
@@ -386,58 +573,58 @@ async function viewWine(id) {
   const t = ensureTasting(w);
   const level = getLevel(t.methodId, t.levelId);
   const method = getMethod(t.methodId);
-  let step = ui.step[id] || (w.colour ? 'appearance' : 'style');
-  ui.step[id] = step;
 
-  const stepper = `<div class="stepper">${STEPS.map((s) => {
-    let cls = s.id === step ? 'on' : '';
-    if (!['style', 'wrap'].includes(s.id)) { const sm = stepSummary(level, s.id, w, t); if (sm.filled === sm.total && sm.total) cls += ' done'; else if (sm.filled) cls += ' part'; }
-    if (s.id === 'style' && w.colour) cls += ' done';
-    if (s.id === 'wrap' && t.score != null && t.score !== '') cls += ' done';
-    return `<button class="${cls}" data-act="step" data-step="${s.id}"><i></i>${s.title}</button>`;
+  const progress = SECTIONS.map((s) => ({ s, p: sectionProgress(level, s, w, t) }));
+  const strip = `<div class="pstrip">${progress.map(({ s, p }) => {
+    const pct = p.total ? Math.round((p.filled / p.total) * 100) : 0;
+    return `<button data-act="jump" data-sec="${s.id}" class="${p.done ? 'done' : pct ? 'part' : ''}"><i><b style="width:${pct}%"></b></i><span>${s.title}${p.done ? ' ✓' : ''}</span></button>`;
   }).join('')}</div>`;
 
-  let body = '';
-  if (step === 'style') {
-    body = `<p class="muted">The style decides which options and lexicon clusters you see.</p>${styleChips(w)}
-      ${w.colour && w.colour !== 'red' ? `<label class="switch-row"><span>Show tannin <span class="muted small">(orange / skin-contact)</span></span><input type="checkbox" data-act-change="showTannin" ${t.showTannin ? 'checked' : ''}><i></i></label>` : ''}`;
-  } else if (step === 'wrap') {
-    body = await wrapUp(w, t, level, event, idx);
-  } else {
-    const fs = fieldsFor(level, step, w, settings, t);
-    body = fs.map((f) => renderField(f, t, w, level) + (f.blic ? blicHelper(t) : '')).join('');
-  }
-  const si = STEPS.findIndex((s) => s.id === step);
-  const nav = `<div class="step-nav">
-      ${si > 0 ? `<button class="btn" data-act="step" data-step="${STEPS[si - 1].id}">‹ ${STEPS[si - 1].title}</button>` : '<span></span>'}
-      ${si < STEPS.length - 1 ? `<button class="btn primary" data-act="step" data-step="${STEPS[si + 1].id}">${STEPS[si + 1].title} ›</button>` : '<span></span>'}
-    </div>`;
-  const sub = `${method.name} · ${level.name}${w.colour ? ' · ' + COLOUR_LABEL[w.colour] : ''}${w.type && w.type !== 'still' ? ' ' + TYPE_LABEL[w.type].toLowerCase() : ''}`;
-  return shell(`<div class="wine-sub muted small">${esc(sub)} · wine ${idx + 1} of ${wines.length}</div>${stepper}<div class="step-body">${body}</div>${nav}`,
+  const sections = SECTIONS.map((s) => renderSection(s, level, w, t, event, idx, wines)).join('');
+  const extras = await wrapExtras(w, t, level, event, idx, wines);
+  const sub = `${method.name} · ${level.name} · ${styleLabel(w)}${event.blind && !w.revealed ? ' · blind' : ''}`;
+  const modeToggle = `<div class="mode-toggle" role="group" aria-label="Mode">
+      <button class="${t.mode === 'quick' ? 'on' : ''}" data-act="mode" data-v="quick">Quick</button>
+      <button class="${t.mode !== 'quick' ? 'on' : ''}" data-act="mode" data-v="full">Full SAT</button></div>`;
+  return shell(`<div class="sheet-head"><div class="wine-sub muted small">${esc(sub)} · wine ${idx + 1} of ${wines.length}</div>${modeToggle}</div>${strip}<div class="sheet">${sections}${extras}</div>`,
     { title: displayName(w, event, idx), back: `#/event/${w.eventId}`, actions: (!event.blind || w.revealed) ? `<a class="icon-btn" href="#/event/${w.eventId}/wine/${w.id}/edit" aria-label="Wine details">✎</a>` : '' });
 }
 
-async function wrapUp(w, t, level, event, idx) {
-  const scale = event.scale;
-  const band = bandFor(t.values.quality, scale);
-  const min = scale === 20 ? 0 : 50, max = scale === 20 ? 20 : 100, stepv = scale === 20 ? 0.5 : 1;
-  const cur = t.score != null && t.score !== '' ? t.score : (band ? band[0] : '');
-  const g = ui.guessOpen === w.id ? guess(w, t) : null;
+// Guess, note, photos, reveal and the save buttons, below the Verdict.
+async function wrapExtras(w, t, level, event, idx, wines) {
+  const dt = derived(t);
+  const gOpen = ui.guessOpen === w.id;
+  const nOpen = ui.noteOpen === w.id;
+  const g = guess(w, dt);
+  const top = g.results[0];
   const fmt = ui.noteFormat || settings.noteFormat;
-  const note = generateNote(fmt, w, t, level, event);
+  const note = generateNote(fmt, w, dt, level, event);
   const photos = await db.byIndex('media', 'owner', 'wine:' + w.id);
   const label = w.labelId ? await db.get('media', w.labelId) : null;
 
-  const guessPanel = g ? `
-    <div class="guess-panel">
-      ${g.filled < 3 ? '<p class="note-box">Fill more of the structure (acidity, tannin, body, alcohol) and some aromas for a sharper guess.</p>' : ''}
+  const guessPanel = gOpen ? `
+    <div class="panel">
+      ${g.filled < 3 ? '<p class="note-box">Fill more of the structure and a few aromas for a sharper guess.</p>' : ''}
       ${g.results.length ? `<ol class="guess-list">${g.results.map((r) => `
         <li><div class="gl-top"><span><b>${esc(r.profile.name)}</b>, ${esc(r.profile.region)}${r.ageHint ? `, ${r.ageHint}` : ''}</span><span class="pct">${r.pct}%</span></div>
         <div class="bar"><i style="width:${r.pct}%"></i></div>
         <div class="muted small">${esc(explain(r))}</div></li>`).join('')}</ol>
-        <p class="muted tiny">Percentages are relative likelihoods among the ${g.results.length ? 'candidates in the app\'s knowledge base' : ''}, not true probabilities.</p>`
+        <p class="muted tiny">Relative likelihoods among the app's wine profiles, not true probabilities.</p>`
       : '<p class="muted">No profile in the knowledge base matches this style yet.</p>'}
       <label class="block-label">My guess<input data-text-t="myGuess" value="${attr(t.myGuess || '')}" placeholder="e.g. Nebbiolo, Barolo, 2015"></label>
+    </div>` : '';
+
+  const notePanel = nOpen ? `
+    <div class="panel">
+      <div class="seg small-seg">${['full', 'short', 'social'].map((f) => `<button data-act="noteFmt" data-v="${f}" class="${fmt === f ? 'on' : ''}">${{ full: 'WSET full', short: 'Short', social: 'Social' }[f]}</button>`).join('')}</div>
+      <div class="note-out" id="noteOut">${esc(note) || '<span class="muted">Your note appears here as you tap.</span>'}</div>
+      <div class="row2"><button class="btn" data-act="copyNote">Copy</button><button class="btn" data-act="shareNote">Share</button></div>
+      <label class="block-label">My notes<textarea rows="3" data-text-t="myNotes" placeholder="Price, who brought it, food, mood…">${esc(t.myNotes || '')}</textarea></label>
+      <div class="field-label">Photos</div>
+      <div class="gallery">
+        ${photos.map((m) => `<div class="g-item"><img src="${mediaURL(m)}" alt=""><button class="g-del" data-act="delMedia" data-id="${m.id}" aria-label="Delete photo">✕</button></div>`).join('')}
+        <label class="g-add">📷<br><span class="small">Add</span><input type="file" accept="image/*" multiple hidden data-upload="wine:${w.id}"></label>
+      </div>
     </div>` : '';
 
   const reveal = event.blind ? (w.revealed ? `
@@ -448,36 +635,19 @@ async function wrapUp(w, t, level, event, idx) {
         <div class="muted small">${esc([w.grapes, w.region, w.country].filter(Boolean).join(' · '))}</div>
         <a class="link" href="#/event/${w.eventId}/wine/${w.id}/edit">Fill in or fix details</a>
         <div class="field-label">How was my guess?</div>
-        <div class="chips">${['right', 'close', 'wrong'].map((r) => `<button class="chip ${t.guessResult === r ? 'on' : ''}" data-act="guessResult" data-v="${r}">${r}</button>`).join('')}</div>
-      </div>` : `<button class="btn reveal-btn" data-act="reveal">👁 Reveal the wine</button>`) : '';
+        <div class="seg-bar" style="grid-template-columns: repeat(3, minmax(0, 1fr))">${['right', 'close', 'wrong'].map((r) => `<button class="${t.guessResult === r ? 'on' : ''}" data-act="guessResult" data-v="${r}">${r}</button>`).join('')}</div>
+      </div>` : `<button class="btn reveal-btn" data-act="reveal">Reveal the wine</button>`) : '';
 
+  const next = wines.slice(idx + 1).find((x) => !(x.tasting && x.tasting.done)) || wines[idx + 1];
   return `
     <div class="wrap-grid">
-      <button class="big-card ${g ? 'on' : ''}" data-act="guess"><span class="bc-icon">🔍</span><b>GUESS</b><span class="muted small">What is it?</span></button>
-      <div class="big-card score-card">
-        <span class="bc-icon">★</span><b>SCORE</b>
-        <input class="score-num" type="number" inputmode="decimal" min="${min}" max="${max}" step="${stepv}" value="${attr(cur)}" data-score placeholder="–">
-        <span class="muted small">/${scale}</span>
-      </div>
+      <button class="big-card ${gOpen ? 'on' : ''}" data-act="guess"><b>GUESS</b><span class="muted small">${top && g.filled >= 3 ? `${esc(top.profile.name)} ${top.pct}%` : 'What is it?'}</span></button>
+      <button class="big-card ${nOpen ? 'on' : ''}" data-act="noteToggle"><b>NOTE</b><span class="muted small">Copy · share · photos</span></button>
     </div>
-    ${guessPanel}
-    <input type="range" class="score-range" min="${min}" max="${max}" step="${stepv}" value="${attr(cur === '' ? (scale === 20 ? 16 : 88) : cur)}" data-score-range>
-    <div class="muted small center">${band ? `SAT quality <b>${esc(t.values.quality)}</b> suggests ${band[0]}–${band[1]}.` : 'Pick a quality level in Conclusions to get a suggested range.'}
-      ${t.score == null || t.score === '' ? (band ? ` <button class="link" data-act="useBand" data-v="${band[0]}">Set ${band[0]}</button>` : '') : ''}</div>
-    ${reveal}
-    <label class="block-label">My notes<textarea rows="3" data-text-t="myNotes" placeholder="Price, who brought it, food, mood…">${esc(t.myNotes || '')}</textarea></label>
-    <div class="field-label">Tasting note</div>
-    <div class="seg small-seg">${['full', 'short', 'social'].map((f) => `<button data-act="noteFmt" data-v="${f}" class="${fmt === f ? 'on' : ''}">${{ full: 'WSET full', short: 'Short', social: 'Social' }[f]}</button>`).join('')}</div>
-    <div class="note-out" id="noteOut">${esc(note) || '<span class="muted">Your note appears here as you tap.</span>'}</div>
-    <div class="row2">
-      <button class="btn" data-act="copyNote">Copy</button>
-      <button class="btn" data-act="shareNote">Share</button>
-    </div>
-    <div class="field-label">Photos</div>
-    <div class="gallery">
-      ${photos.map((m) => `<div class="g-item"><img src="${mediaURL(m)}" alt=""><button class="g-del" data-act="delMedia" data-id="${m.id}">✕</button></div>`).join('')}
-      <label class="g-add">📷<br><span class="small">Add</span><input type="file" accept="image/*" multiple hidden data-upload="wine:${w.id}"></label>
-    </div>`;
+    ${guessPanel}${notePanel}${reveal}
+    <button class="btn primary big-btn" data-act="finish">${t.done ? 'Save changes' : 'Finish & save'}</button>
+    ${next ? `<button class="btn" data-act="finish" data-next="${next.id}">Save & taste wine ${wines.indexOf(next) + 1} ›</button>` : ''}
+    <p class="muted tiny center">Your taps are saved automatically as you go.</p>`;
 }
 
 // ---------- global standings
@@ -533,6 +703,9 @@ async function viewSettings() {
         <input type="checkbox" ${settings.structurePlus ? 'checked' : ''} data-act-change="structurePlus"><i></i></label>
       <div class="field-label">Default scoring scale</div>
       <div class="seg">${[100, 20].map((s) => `<label><input type="radio" name="scale" value="${s}" ${settings.scale === s ? 'checked' : ''} data-act-change="scale"><span>${s} points</span></label>`).join('')}</div>
+      <div class="field-label">Default tasting mode</div>
+      <div class="seg">${[['quick', 'Quick'], ['full', 'Full SAT']].map(([v, l]) => `<label><input type="radio" name="mode" value="${v}" ${settings.mode === v ? 'checked' : ''} data-act-change="defaultMode"><span>${l}</span></label>`).join('')}</div>
+      <p class="muted small">Quick shows only the key lines (style, aromas, structure, quality, score). You can switch on each wine.</p>
       <div class="field-label">Tasting note format</div>
       <div class="seg">${['full', 'short', 'social'].map((s) => `<label><input type="radio" name="noteFormat" value="${s}" ${settings.noteFormat === s ? 'checked' : ''} data-act-change="noteFormat"><span>${{ full: 'WSET full', short: 'Short', social: 'Social' }[s]}</span></label>`).join('')}</div>
     </section>
@@ -580,6 +753,17 @@ async function route() {
   hydrateMedia();
   route.lastHash = h;
   window.scrollTo(0, keepScroll ? y : 0);
+  if (ui.scrollNext) {
+    const from = $app.querySelector(`[data-field="${ui.scrollNext}"]`);
+    ui.scrollNext = null;
+    const all = [...$app.querySelectorAll('[data-field]')];
+    const start = from ? all.indexOf(from) : -1;
+    const nxt = all.slice(start + 1).find((n) => n.dataset.empty === '1');
+    if (nxt) {
+      const r = nxt.getBoundingClientRect();
+      if (r.top > window.innerHeight * 0.7 || r.top < 80) nxt.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    }
+  }
 }
 
 async function hydrateMedia() {
@@ -596,6 +780,7 @@ const currentEventId = () => { const p = location.hash.split('/'); return p[1] =
 async function withWine(fn, render = true) {
   const id = currentWineId();
   if (!id) return;
+  await flushWine();
   const w = await db.get('wines', id);
   ensureTasting(w);
   await fn(w, w.tasting);
@@ -606,9 +791,50 @@ async function withWine(fn, render = true) {
 // ---------------------------------------------------------------- actions
 const actions = {
   async eventTab(el) { ui.eventTab[currentEventId()] = el.dataset.tab; rerender(); },
-  async step(el) { ui.step[currentWineId()] = el.dataset.step; route.lastHash = null; rerender(); },
   async pick(el) {
-    await withWine((w, t) => { const f = el.dataset.f; t.values[f] = t.values[f] === el.dataset.v ? undefined : el.dataset.v; });
+    const f = el.dataset.f;
+    let set = false;
+    await withWine(async (w, t) => {
+      set = t.values[f] !== el.dataset.v;
+      t.values[f] = set ? el.dataset.v : undefined;
+      if (f === 'quality' && set && !t.scoreTouched) {
+        const ev = await db.get('events', w.eventId);
+        const band = bandFor(el.dataset.v, ev.scale);
+        if (band) { const mid = (band[0] + band[1]) / 2; t.score = ev.scale === 20 ? Math.round(mid * 2) / 2 : Math.round(mid); }
+      }
+    }, false);
+    if (set) ui.scrollNext = f;
+    rerender();
+  },
+  async mode(el) { await withWine((w, t) => { t.mode = el.dataset.v; }); },
+  async unfold(el) { ui.unfold[el.dataset.k] = true; rerender(); },
+  async fold(el) { ui.unfold[el.dataset.k] = false; rerender(); },
+  async plusOpen(el) { ui.open['plus' + el.dataset.k] = true; rerender(); },
+  async wheel(el) { ui.open['wheel' + el.dataset.k] = !ui.open['wheel' + el.dataset.k]; rerender(); },
+  async noteToggle() { const id = currentWineId(); ui.noteOpen = ui.noteOpen === id ? null : id; rerender(); },
+  async jump(el) {
+    const id = currentWineId();
+    ui.unfold[id + el.dataset.sec] = true;
+    await route();
+    const sec = $app.querySelector('#sec-' + el.dataset.sec);
+    if (sec) sec.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  },
+  async styleTile(el) {
+    const s = STYLE_TILES.find((x) => x.k === el.dataset.v);
+    const apply = (w) => { w.colour = s.colour; w.type = s.type; w.sweet = !!s.sweet; };
+    if (location.hash.includes('/add') || location.hash.endsWith('/edit')) { readWineForm(); apply(draftWine); rerender(); return; }
+    await withWine((w) => apply(w), false);
+    ui.scrollNext = 'style';
+    rerender();
+  },
+  async quickAdd(el) {
+    const eventId = currentEventId();
+    const s = STYLE_TILES.find((x) => x.k === el.dataset.v);
+    const existing = await db.byIndex('wines', 'eventId', eventId);
+    const w = { id: uid(), eventId, colour: s.colour, type: s.type, sweet: !!s.sweet, order: existing.length, createdAt: Date.now(), saved: true };
+    await db.put('wines', w);
+    toast(`Wine ${existing.length + 1} added: ${s.label}`);
+    rerender();
   },
   async toggle(el) {
     await withWine((w, t) => {
@@ -620,7 +846,7 @@ const actions = {
   async descr(el) {
     await withWine((w, t) => {
       const f = el.dataset.f, c = el.dataset.c, d = el.dataset.v;
-      const arr = t.values[f] || [];
+      const arr = f === 'flavours' ? flavoursOf(t) : (t.values[f] || []);
       const i = arr.findIndex((s) => s.c === c && s.d === d);
       if (i >= 0) arr.splice(i, 1); else arr.push({ c, d });
       t.values[f] = arr;
@@ -638,11 +864,11 @@ const actions = {
   async more(el) { ui.moreOpen[el.dataset.k] = !ui.moreOpen[el.dataset.k]; rerender(); },
   async addOwn(el) {
     const input = $app.querySelector(`[data-addown="${el.dataset.f}"]`);
-    const d = (input.value || '').trim().toLowerCase();
+    const d = (el.dataset.v || (input && input.value) || '').trim().toLowerCase();
     if (!d) return;
     if (!settings.customLexicon.includes(d)) { settings.customLexicon.push(d); await saveSettings(); }
     await withWine((w, t) => {
-      const arr = t.values[el.dataset.f] || [];
+      const arr = el.dataset.f === 'flavours' ? flavoursOf(t) : (t.values[el.dataset.f] || []);
       if (!arr.some((s) => s.d === d)) arr.push({ c: 'custom', d });
       t.values[el.dataset.f] = arr;
     });
@@ -650,15 +876,15 @@ const actions = {
   async blic(el) {
     await withWine((w, t) => { const v = el.dataset.v; t.blic = (t.blic || []).includes(v) ? t.blic.filter((x) => x !== v) : [...(t.blic || []), v]; });
   },
-  async setStyle(el) {
-    const k = el.dataset.k, v = el.dataset.v;
-    if (location.hash.includes('/add') || location.hash.endsWith('/edit')) {
-      readWineForm(); draftWine[k] = v; rerender(); return;
-    }
-    await withWine((w) => { w[k] = v; });
+  async guess() { const id = currentWineId(); ui.guessOpen = ui.guessOpen === id ? null : id; if (ui.guessOpen) await withWine((w, t) => { t.engineGuess = guess(w, derived(t)).results.slice(0, 3).map((r) => r.profile.id); }); else rerender(); },
+  async finish(el) {
+    await flushWine();
+    const next = el.dataset.next;
+    let eventId;
+    await withWine((w, t) => { t.values.flavours = flavoursOf(t); t.done = true; t.finishedAt = Date.now(); eventId = w.eventId; }, false);
+    toast('Tasting saved');
+    go(next ? `#/wine/${next}` : `#/event/${eventId}`);
   },
-  async guess() { const id = currentWineId(); ui.guessOpen = ui.guessOpen === id ? null : id; if (ui.guessOpen) await withWine((w, t) => { t.engineGuess = guess(w, t).results.slice(0, 3).map((r) => r.profile.id); }); else rerender(); },
-  async useBand(el) { await withWine((w, t) => { t.score = +el.dataset.v; }); },
   async noteFmt(el) { ui.noteFormat = el.dataset.v; rerender(); },
   async copyNote() {
     const text = $app.querySelector('#noteOut').innerText;
@@ -720,6 +946,7 @@ const changeActions = {
   async structurePlus(el) { settings.structurePlus = el.checked; await saveSettings(); },
   async scale(el) { settings.scale = +el.value; await saveSettings(); },
   async noteFormat(el) { settings.noteFormat = el.value; ui.noteFormat = null; await saveSettings(); },
+  async defaultMode(el) { settings.mode = el.value; await saveSettings(); },
   async standingsFilter(el) { ui.standingsFilter = el.value; rerender(); },
   async showTannin(el) { await withWine((w, t) => { t.showTannin = el.checked; }); },
 };
@@ -741,16 +968,25 @@ document.addEventListener('change', async (e) => {
 document.addEventListener('input', async (e) => {
   const el = e.target;
   const wid = currentWineId();
+  if (el.dataset.aromaSearch && wid) {
+    const fid = el.dataset.aromaSearch;
+    const w = pendingWine && pendingWine.id === wid ? pendingWine : await db.get('wines', wid);
+    const t = ensureTasting(w);
+    const box = $app.querySelector(`[data-results="${fid}"]`);
+    if (box) box.innerHTML = searchResults(fid, el.value, w, t, getLevel(t.methodId, t.levelId));
+    return;
+  }
   if (el.id === 'eventNotes') {
     const ev = await db.get('events', currentEventId());
     ev.notes = el.value; saveEventSoon(ev);
   } else if (wid && (el.dataset.text || el.dataset.textT || el.dataset.score !== undefined || el.dataset.scoreRange !== undefined)) {
-    const w = await db.get('wines', wid);
+    const w = pendingWine && pendingWine.id === wid ? pendingWine : await db.get('wines', wid);
     const t = ensureTasting(w);
     if (el.dataset.text) t.values[el.dataset.text] = el.value;
     else if (el.dataset.textT) t[el.dataset.textT] = el.value;
     else {
       t.score = el.value === '' ? null : +el.value;
+      t.scoreTouched = true;
       const other = $app.querySelector(el.dataset.score !== undefined ? '[data-score-range]' : '[data-score]');
       if (other && el.value !== '') other.value = el.value;
     }
@@ -758,12 +994,18 @@ document.addEventListener('input', async (e) => {
     const out = $app.querySelector('#noteOut');
     if (out) {
       const event = await db.get('events', w.eventId);
-      out.textContent = generateNote(ui.noteFormat || settings.noteFormat, w, t, getLevel(t.methodId, t.levelId), event);
+      out.textContent = generateNote(ui.noteFormat || settings.noteFormat, w, derived(t), getLevel(t.methodId, t.levelId), event);
     }
   }
 });
 
 document.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && e.target.dataset && e.target.dataset.aromaSearch) {
+    e.preventDefault();
+    const first = $app.querySelector(`[data-results="${e.target.dataset.aromaSearch}"] .sr`);
+    if (first) first.click();
+    return;
+  }
   if (e.key === 'Enter' && e.target.dataset && e.target.dataset.addown) { e.preventDefault(); actions.addOwn({ dataset: { f: e.target.dataset.addown } }); }
 });
 
