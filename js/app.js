@@ -69,10 +69,17 @@ async function saveSettings() { await db.setKV('settings', settings); }
 const go = (hash) => { location.hash = hash; };
 
 // Debounced wine saving while tasting.
-let saveTimer;
+let saveTimer, pendingWine;
 function saveWineSoon(wine) {
   clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => db.put('wines', wine), 250);
+  pendingWine = wine;
+  saveTimer = setTimeout(flushWine, 250);
+}
+async function flushWine() {
+  clearTimeout(saveTimer);
+  const w = pendingWine;
+  pendingWine = null;
+  if (w) await db.put('wines', w);
 }
 
 function scoreToHundred(score, scale) { return scale === 20 ? score * 5 : score; }
@@ -202,7 +209,7 @@ async function viewEvent(id) {
   if (tab === 'wines') {
     body = wines.map((w, i) => {
       const t = w.tasting;
-      const status = !t ? 'not started' : (t.score != null && t.score !== '' ? 'done' : 'tasting');
+      const status = !t ? 'not started' : (t.done ? 'done ✓' : 'tasting');
       const thumb = !event.blind || w.revealed ? (w.labelId ? `<img class="thumb" data-media="${w.labelId}" alt="">` : '<div class="thumb ph">🍾</div>') : `<div class="thumb ph blind">${i + 1}</div>`;
       return `
         <div class="card wine-card">
@@ -410,8 +417,10 @@ async function viewWine(id) {
   const si = STEPS.findIndex((s) => s.id === step);
   const nav = `<div class="step-nav">
       ${si > 0 ? `<button class="btn" data-act="step" data-step="${STEPS[si - 1].id}">‹ ${STEPS[si - 1].title}</button>` : '<span></span>'}
-      ${si < STEPS.length - 1 ? `<button class="btn primary" data-act="step" data-step="${STEPS[si + 1].id}">${STEPS[si + 1].title} ›</button>` : '<span></span>'}
-    </div>`;
+      ${si < STEPS.length - 1 ? `<button class="btn primary" data-act="step" data-step="${STEPS[si + 1].id}">${STEPS[si + 1].title} ›</button>` : `<button class="btn primary" data-act="finish">${t.done ? 'Save changes' : 'Finish & save'}</button>`}
+    </div>
+    ${si === STEPS.length - 1 && wines[idx + 1] ? `<button class="btn" data-act="finish" data-next="${wines[idx + 1].id}">Save & taste wine ${idx + 2} ›</button>` : ''}
+    <p class="muted tiny center">Your taps are saved automatically as you go.</p>`;
   const sub = `${method.name} · ${level.name}${w.colour ? ' · ' + COLOUR_LABEL[w.colour] : ''}${w.type && w.type !== 'still' ? ' ' + TYPE_LABEL[w.type].toLowerCase() : ''}`;
   return shell(`<div class="wine-sub muted small">${esc(sub)} · wine ${idx + 1} of ${wines.length}</div>${stepper}<div class="step-body">${body}</div>${nav}`,
     { title: displayName(w, event, idx), back: `#/event/${w.eventId}`, actions: (!event.blind || w.revealed) ? `<a class="icon-btn" href="#/event/${w.eventId}/wine/${w.id}/edit" aria-label="Wine details">✎</a>` : '' });
@@ -596,6 +605,7 @@ const currentEventId = () => { const p = location.hash.split('/'); return p[1] =
 async function withWine(fn, render = true) {
   const id = currentWineId();
   if (!id) return;
+  await flushWine();
   const w = await db.get('wines', id);
   ensureTasting(w);
   await fn(w, w.tasting);
@@ -658,6 +668,14 @@ const actions = {
     await withWine((w) => { w[k] = v; });
   },
   async guess() { const id = currentWineId(); ui.guessOpen = ui.guessOpen === id ? null : id; if (ui.guessOpen) await withWine((w, t) => { t.engineGuess = guess(w, t).results.slice(0, 3).map((r) => r.profile.id); }); else rerender(); },
+  async finish(el) {
+    await flushWine();
+    const next = el.dataset.next;
+    let eventId;
+    await withWine((w, t) => { t.done = true; t.finishedAt = Date.now(); eventId = w.eventId; }, false);
+    toast('Tasting saved');
+    go(next ? `#/wine/${next}` : `#/event/${eventId}`);
+  },
   async useBand(el) { await withWine((w, t) => { t.score = +el.dataset.v; }); },
   async noteFmt(el) { ui.noteFormat = el.dataset.v; rerender(); },
   async copyNote() {
@@ -745,7 +763,7 @@ document.addEventListener('input', async (e) => {
     const ev = await db.get('events', currentEventId());
     ev.notes = el.value; saveEventSoon(ev);
   } else if (wid && (el.dataset.text || el.dataset.textT || el.dataset.score !== undefined || el.dataset.scoreRange !== undefined)) {
-    const w = await db.get('wines', wid);
+    const w = pendingWine && pendingWine.id === wid ? pendingWine : await db.get('wines', wid);
     const t = ensureTasting(w);
     if (el.dataset.text) t.values[el.dataset.text] = el.value;
     else if (el.dataset.textT) t[el.dataset.textT] = el.value;
