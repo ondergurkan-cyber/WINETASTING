@@ -1,9 +1,9 @@
 // Offline cache for the app shell. Bump VERSION when files change.
-const VERSION = 'tasting-v14';
+const VERSION = 'tasting-v15';
 const FILES = [
   './', 'index.html', 'manifest.webmanifest', 'css/app.css',
   'js/app.js', 'js/db.js', 'js/note.js', 'js/guess.js', 'js/profiles.js',
-  'js/scan.js', 'js/icons.js', 'js/plate.js', 'js/sync.js', 'js/config.js', 'js/methods/index.js', 'js/methods/wset.js',
+  'js/scan.js', 'js/icons.js', 'js/plate.js', 'images/hero-day.webp', 'images/hero-night.webp', 'js/sync.js', 'js/config.js', 'js/methods/index.js', 'js/methods/wset.js',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png',
   'fonts/libre-caslon-display-latin-400-normal.woff2', 'fonts/libre-caslon-text-latin-400-italic.woff2',
   'fonts/josefin-sans-latin-600-normal.woff2', 'fonts/courier-prime-latin-400-normal.woff2',
