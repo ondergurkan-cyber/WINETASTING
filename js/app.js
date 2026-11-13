@@ -98,17 +98,17 @@ function bandFor(quality, scale) {
 // ---------------------------------------------------------------- shell
 function shell(content, { title, back, tab, actions = '' } = {}) {
   const tabs = tab ? `
-    <nav class="tabbar">
-      <a href="#/" class="${tab === 'home' ? 'on' : ''}"><span class="ti">${icon('home')}</span>Home</a>
-      <a href="#/events" class="${tab === 'tasting' ? 'on' : ''}"><span class="ti">${icon('glass')}</span>Tasting</a>
-      <a href="#/cellar" class="${tab === 'cellar' ? 'on' : ''}"><span class="ti">${icon('bottle')}</span>Cellar</a>
-      <a href="#/merchants" class="${tab === 'merchants' ? 'on' : ''}"><span class="ti">${icon('shop')}</span>Merchants</a>
-      <a href="#/standings" class="${tab === 'standings' ? 'on' : ''}"><span class="ti">${icon('laurel')}</span>Standings</a>
+    <nav class="tabbar" aria-label="Main">
+      <a href="#/" class="${tab === 'home' ? 'on' : ''}"${tab === 'home' ? ' aria-current="page"' : ''}><span class="ti">${icon('home')}</span>Home</a>
+      <a href="#/events" class="${tab === 'tasting' ? 'on' : ''}"${tab === 'tasting' ? ' aria-current="page"' : ''}><span class="ti">${icon('glass')}</span>Tasting</a>
+      <a href="#/cellar" class="${tab === 'cellar' ? 'on' : ''}"${tab === 'cellar' ? ' aria-current="page"' : ''}><span class="ti">${icon('bottle')}</span>Cellar</a>
+      <a href="#/merchants" class="${tab === 'merchants' ? 'on' : ''}"${tab === 'merchants' ? ' aria-current="page"' : ''}><span class="ti">${icon('shop')}</span>Merchants</a>
+      <a href="#/standings" class="${tab === 'standings' ? 'on' : ''}"${tab === 'standings' ? ' aria-current="page"' : ''}><span class="ti">${icon('laurel')}</span>Standings</a>
     </nav>` : '';
   return `
     <header class="topbar">
       ${back ? `<a class="back" href="${back}" aria-label="Back">${icon('back', 22)}</a>` : syncMark()}
-      <h1>${esc(title || 'Tasting')}</h1>
+      <h1 tabindex="-1">${esc(title || 'Tasting')}</h1>
       <div class="top-actions">${actions || (tab ? `<a class="icon-btn" href="#/settings" aria-label="Settings">${icon('gear', 20)}</a>` : '')}</div>
     </header>
     <main class="${[tab ? 'with-tabs' : '', tab === 'home' ? 'home' : ''].join(' ').trim()}">${content}</main>
@@ -187,8 +187,8 @@ async function viewEvents() {
 
 function homeTabs(on) {
   return `<div class="seg seg-tabs">
-      <a href="#/events" class="${on === 'events' ? 'on' : ''}">Events</a>
-      <a href="#/mywines" class="${on === 'mywines' ? 'on' : ''}">My Wines</a>
+      <a href="#/events" class="${on === 'events' ? 'on' : ''}"${on === 'events' ? ' aria-current="page"' : ''}>Events</a>
+      <a href="#/mywines" class="${on === 'mywines' ? 'on' : ''}"${on === 'mywines' ? ' aria-current="page"' : ''}>My Wines</a>
     </div>`;
 }
 
@@ -567,7 +567,7 @@ async function viewEvent(id) {
       <div class="gallery">
         ${media.map((m) => m.kind === 'video'
           ? `<div class="g-item"><video data-media="${m.id}" controls playsinline></video><button class="g-del" data-act="delMedia" data-id="${m.id}">✕</button></div>`
-          : `<div class="g-item"><img data-media="${m.id}" alt=""><button class="g-del" data-act="delMedia" data-id="${m.id}">✕</button></div>`).join('')}
+          : `<div class="g-item"><img data-media="${m.id}" alt=""><button class="g-del" data-act="delMedia" data-id="${m.id}" aria-label="Delete photo">✕</button></div>`).join('')}
         <label class="g-add">${icon('plus', 26)}<span class="small">Add</span><input type="file" accept="image/*,video/*" multiple hidden data-upload="event:${id}"></label>
       </div>`;
   }
@@ -765,7 +765,9 @@ function sectionSummary(level, sec, w, t) {
 
 function segRow(f, t, opts) {
   const val = t.values[f.id];
-  const cols = opts.length > 6 ? 3 : opts.length;
+  // pills with a long word (e.g. "developing") get two columns on a phone instead of an ellipsis
+  const long = !(f.scale && opts.length <= 6) && opts.length > 3 && opts.some((o) => short(o).length > 9);
+  const cols = opts.length > 6 ? 3 : long && innerWidth < 600 ? (opts.length === 4 ? 2 : 3) : opts.length;
   return `<div class="srow" data-field="${f.id}" data-empty="${val ? 0 : 1}">
       <div class="srow-label">${esc(f.label)}</div>
       <div class="seg-bar ${f.scale && opts.length <= 6 ? 'scale' : 'pills'}" style="grid-template-columns: repeat(${cols}, minmax(0, 1fr))">${opts.map((o) => `<button class="${val === o ? 'on' : ''}" data-act="pick" data-f="${f.id}" data-v="${attr(o)}" aria-label="${attr(o)}">${esc(short(o))}</button>`).join('')}</div>
@@ -1389,6 +1391,7 @@ async function route() {
   const p = h.split('/').filter(Boolean);
   const keepScroll = route.lastHash === h;
   const y = window.scrollY;
+  const focusKey = keepScroll ? focusKeyOf(document.activeElement) : null;
   let html;
   try {
     if (!p.length) html = await viewHome();
@@ -1419,9 +1422,12 @@ async function route() {
     html = shell(`<p class="note-box">Something went wrong: ${esc(err.message)}</p>`, { title: 'Error', back: '#/' });
   }
   $app.innerHTML = html;
+  a11yPass($app);
   hydrateMedia();
+  const pageChanged = route.lastHash !== undefined && !keepScroll;
   route.lastHash = h;
   window.scrollTo(0, keepScroll ? y : 0);
+  restoreFocus(focusKey, pageChanged);
   if (ui.scrollNext) {
     const from = $app.querySelector(`[data-field="${ui.scrollNext}"]`);
     ui.scrollNext = null;
@@ -1433,6 +1439,33 @@ async function route() {
       if (r.top > window.innerHeight * 0.7 || r.top < 80) nxt.scrollIntoView({ block: 'center', behavior: 'smooth' });
     }
   }
+}
+
+// ---------------------------------------------------------------- accessibility
+// The screen is redrawn after every tap, so selected state and focus are put back here.
+// Buttons with these actions are toggles: VoiceOver reads "selected" from aria-pressed.
+const TOGGLE_ACTS = new Set(['pick', 'toggle', 'descr', 'blic', 'mode', 'setupLevel', 'eventTab', 'cellarFilter', 'noteFmt', 'guessResult', 'styleTile', 'setupToggle', 'guess', 'noteToggle']);
+function a11yPass(root) {
+  for (const b of root.querySelectorAll('button[data-act]')) {
+    if (TOGGLE_ACTS.has(b.dataset.act) && !b.closest('.picked')) b.setAttribute('aria-pressed', b.classList.contains('on') ? 'true' : 'false');
+  }
+  for (const i of root.querySelectorAll('.switch-row input[type=checkbox]')) i.setAttribute('role', 'switch');
+  for (const b of root.querySelectorAll('.pstrip button')) {
+    const done = b.classList.contains('done'), part = b.classList.contains('part');
+    b.setAttribute('aria-label', `${b.textContent.replace('✓', '').trim()}: ${done ? 'complete' : part ? 'in progress' : 'not started'}`);
+  }
+}
+const FOCUS_KEYS = ['act', 'f', 'v', 'c', 'id', 'tab', 'sec', 'k', 'd', 'dir'];
+function focusKeyOf(el) {
+  if (!el || el === document.body || !$app.contains(el) || !el.dataset) return null;
+  const sel = FOCUS_KEYS.filter((k) => el.dataset[k] != null).map((k) => `[data-${k}="${CSS.escape(el.dataset[k])}"]`).join('');
+  return sel ? el.tagName.toLowerCase() + sel : (el.id ? '#' + CSS.escape(el.id) : null);
+}
+function restoreFocus(key, pageChanged) {
+  const el = key && $app.querySelector(key);
+  if (el && !el.disabled) { el.focus({ preventScroll: true }); return; }
+  // A new screen: start screen readers at its title, like a native push.
+  if (pageChanged) { const h = $app.querySelector('h1'); if (h) h.focus({ preventScroll: true }); }
 }
 
 async function hydrateMedia() {
