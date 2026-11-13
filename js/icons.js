@@ -5,6 +5,7 @@ const svg = (body, size = 24, extra = '') =>
   `<svg class="ic" ${extra} width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${body}</svg>`;
 
 const P = {
+  home: '<path d="M4 10.5 12 4l8 6.5"/><path d="M6 9v11h12V9"/><path d="M10 20v-5.5h4V20"/>',
   glass: '<path d="M7 3h10l-.6 5.2A4.4 4.4 0 0 1 12 12.2a4.4 4.4 0 0 1-4.4-4L7 3Z"/><path d="M7.4 7h9.2"/><path d="M12 12.2V20"/><path d="M8.5 20.5h7"/>',
   glasses: '<path d="M4 3h6l-.4 4a2.6 2.6 0 0 1-5.2 0L4 3Z"/><path d="M7 9.6V19"/><path d="M5 19.5h4"/><path d="M14 3h6l-.4 4a2.6 2.6 0 0 1-5.2 0L14 3Z"/><path d="M17 9.6V19"/><path d="M15 19.5h4"/>',
   bottle: '<path d="M10.5 2.5h3v4.2c0 .9 3 2.1 3 5.3v8.2a1.3 1.3 0 0 1-1.3 1.3H8.8a1.3 1.3 0 0 1-1.3-1.3V12c0-3.2 3-4.4 3-5.3V2.5Z"/><path d="M7.5 13.5h9v4.5h-9z"/>',

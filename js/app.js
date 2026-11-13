@@ -99,19 +99,19 @@ function bandFor(quality, scale) {
 function shell(content, { title, back, tab, actions = '' } = {}) {
   const tabs = tab ? `
     <nav class="tabbar">
-      <a href="#/" class="${tab === 'tasting' ? 'on' : ''}"><span class="ti">${icon('glass')}</span>Tasting</a>
+      <a href="#/" class="${tab === 'home' ? 'on' : ''}"><span class="ti">${icon('home')}</span>Home</a>
+      <a href="#/events" class="${tab === 'tasting' ? 'on' : ''}"><span class="ti">${icon('glass')}</span>Tasting</a>
       <a href="#/cellar" class="${tab === 'cellar' ? 'on' : ''}"><span class="ti">${icon('bottle')}</span>Cellar</a>
       <a href="#/merchants" class="${tab === 'merchants' ? 'on' : ''}"><span class="ti">${icon('shop')}</span>Merchants</a>
       <a href="#/standings" class="${tab === 'standings' ? 'on' : ''}"><span class="ti">${icon('laurel')}</span>Standings</a>
-      <a href="#/settings" class="${tab === 'settings' ? 'on' : ''}"><span class="ti">${icon('gear')}</span>Settings</a>
     </nav>` : '';
   return `
     <header class="topbar">
       ${back ? `<a class="back" href="${back}" aria-label="Back">${icon('back', 22)}</a>` : syncMark()}
       <h1>${esc(title || 'Tasting')}</h1>
-      <div class="top-actions">${actions}</div>
+      <div class="top-actions">${actions || (tab ? `<a class="icon-btn" href="#/settings" aria-label="Settings">${icon('gear', 20)}</a>` : '')}</div>
     </header>
-    <main class="${tab ? 'with-tabs' : ''}">${content}</main>
+    <main class="${[tab ? 'with-tabs' : '', tab === 'home' ? 'home' : ''].join(' ').trim()}">${content}</main>
     ${tabs}`;
 }
 
@@ -187,9 +187,236 @@ async function viewEvents() {
 
 function homeTabs(on) {
   return `<div class="seg seg-tabs">
-      <a href="#/" class="${on === 'events' ? 'on' : ''}">Events</a>
+      <a href="#/events" class="${on === 'events' ? 'on' : ''}">Events</a>
       <a href="#/mywines" class="${on === 'mywines' ? 'on' : ''}">My Wines</a>
     </div>`;
+}
+
+// ---------- Home: one page over everything the book holds
+const scoreOf = (w) => (w.tasting && w.tasting.score != null && w.tasting.score !== '' ? +w.tasting.score : null);
+const plural = (n, one, many = one + 's') => `${n} ${n === 1 ? one : many}`;
+const shortDate = (d) => { try { return new Date(d + 'T12:00:00').toLocaleDateString(undefined, { day: 'numeric', month: 'short' }); } catch (e) { return d || ''; } };
+function qualityFor(s100) {
+  for (const [q, b] of Object.entries(DEFAULT_BANDS)) if (s100 >= b[0][0]) return q.charAt(0).toUpperCase() + q.slice(1);
+  return '';
+}
+function topCounts(list, n = 3) {
+  const m = new Map();
+  for (const x of list) { const k = x.trim(); if (k) m.set(k, (m.get(k) || 0) + 1); }
+  return [...m].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, n);
+}
+
+async function viewHome() {
+  const [events, allWines, bottles, merchants, mediaIds] = await Promise.all([db.all('events'), db.all('wines'), db.all('bottles'), db.all('merchants'), db.keys('media')]);
+  const evById = Object.fromEntries(events.map((e) => [e.id, e]));
+  const y = String(thisYear());
+  const now = today();
+  const inYear = (d) => !!d && d.startsWith(y);
+  // Wines that belong somewhere: in an event that still exists, or a saved single tasting.
+  const wines = allWines.filter((w) => (w.eventId ? evById[w.eventId] : w.saved));
+  const pos = {};
+  for (const e of events) wines.filter((w) => w.eventId === e.id).sort((a, b) => a.order - b.order).forEach((w, i) => { pos[w.id] = i; });
+  const ev = (w) => (w.eventId ? evById[w.eventId] : null);
+  const dateOf = (w) => (w.eventId ? (ev(w) || {}).date : w.date) || '';
+  const scaleOf = (w) => (w.eventId ? (ev(w) || {}).scale : w.scale) === 20 ? 20 : 100;
+  const nameOf = (w) => displayName(w, ev(w), pos[w.id] || 0);
+  const hidden = (w) => { const e = ev(w); return !!(e && e.blind && !w.revealed); };
+  const whereOf = (w) => (w.eventId ? (ev(w) || {}).name : ['My Wines', w.place].filter(Boolean).join(' · '));
+  const byDate = (a, b) => dateOf(b).localeCompare(dateOf(a)) || (b.updatedAt || 0) - (a.updatedAt || 0);
+
+  const tasted = wines.filter((w) => w.tasting && (w.tasting.done || scoreOf(w) != null)).sort(byDate);
+  const singles = wines.filter((w) => !w.eventId).sort(byDate);
+  const inCellar = bottles.filter((b) => (b.qty || 0) > 0);
+  const bottleCount = inCellar.reduce((n, b) => n + (b.qty || 0), 0);
+  const cellarValue = inCellar.reduce((n, b) => n + (b.qty || 0) * (num(b.price) || 0), 0);
+  const spentYear = bottles.filter((b) => b.merchantId && inYear(b.purchaseDate)).reduce((n, b) => n + (b.bought ?? b.qty ?? 0) * (num(b.price) || 0), 0);
+  const boughtYear = bottles.filter((b) => inYear(b.purchaseDate)).reduce((n, b) => n + (b.bought ?? b.qty ?? 0), 0);
+  const nothing = !events.length && !wines.length && !bottles.length && !merchants.length;
+
+  const head = `<div class="masthead">
+      <h2 class="mast-date">${esc(new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' }))}</h2>
+      <p class="descriptor">${nothing ? 'A fresh book. Every glass, bottle and shop you add shows up here.'
+        : esc([tasted.filter((w) => inYear(dateOf(w))).length ? `${plural(tasted.filter((w) => inYear(dateOf(w))).length, 'wine')} tasted in ${y}` : `No tastings yet in ${y}`, bottleCount ? `${plural(bottleCount, 'bottle')} in the cellar` : ''].filter(Boolean).join(', ')) + '.'}</p>
+    </div>`;
+
+  if (nothing) {
+    return shell(`${head}
+      <div class="empty home-empty"><div class="empty-icon">${engraving('glass')}</div>
+        <p><b>Start your book</b></p>
+        <p class="muted">Taste a wine, put a bottle in the cellar or note a shop you like. This page then keeps the totals, what needs you, and your latest notes.</p></div>
+      <div class="start-list">
+        <a class="card choice" href="#/new"><span class="choice-icon">${icon('glass', 26)}</span><span><b>Taste a wine</b><br><span class="muted small">An event with several wines, or a single glass.</span></span></a>
+        <a class="card choice" href="#/cellar/new"><span class="choice-icon">${icon('bottle', 26)}</span><span><b>Add bottles</b><br><span class="muted small">What you own, where it sits, when to drink it.</span></span></a>
+        <a class="card choice" href="#/merchant/new"><span class="choice-icon">${icon('shop', 26)}</span><span><b>Add a merchant</b><br><span class="muted small">The shops and importers you buy from.</span></span></a>
+      </div>
+      ${homeFooter(mediaIds.length)}
+    `, { title: 'Home', tab: 'home' });
+  }
+
+  // ---- needs you
+  const todo = [];
+  for (const w of wines.filter((x) => x.tasting && !x.tasting.done).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)).slice(0, 2)) {
+    todo.push({ href: `#/wine/${w.id}`, ic: 'quill', kind: 'go', title: `Continue ${nameOf(w)}`, sub: [whereOf(w), dateOf(w) && shortDate(dateOf(w))].filter(Boolean).join(' · ') });
+  }
+  const soon = inCellar.filter((b) => ['soon', 'past'].includes(windowStatus(b).k));
+  if (soon.length) {
+    const past = soon.filter((b) => windowStatus(b).k === 'past').length;
+    todo.push({ href: '#/cellar/soon', ic: 'bottle', kind: 'warn', title: `${plural(soon.reduce((n, b) => n + (b.qty || 0), 0), 'bottle')} to drink soon`, sub: (past ? `${past} past ${past === 1 ? 'its' : 'their'} window · ` : '') + soon.slice(0, 2).map(wineTitle).join(', ') });
+  }
+  for (const e of events.filter((x) => x.date && x.date > now).sort((a, b) => a.date.localeCompare(b.date)).slice(0, 1)) {
+    const n = wines.filter((w) => w.eventId === e.id).length;
+    todo.push({ href: `#/event/${e.id}`, ic: 'glasses', kind: 'plain', title: `${e.name}`, sub: `Coming up ${shortDate(e.date)} · ${n ? plural(n, 'wine') + ' lined up' : 'no wines added yet'}` });
+  }
+  const needs = `<section class="home-sec" aria-labelledby="h-needs">
+      <h2 class="sec-h" id="h-needs">Needs you</h2>
+      ${todo.length ? `<div class="todo">${todo.map((t) => `<a class="todo-row ${t.kind}" href="${t.href}">
+          <span class="todo-ic">${icon(t.ic, 20)}</span>
+          <span class="todo-main"><b>${esc(t.title)}</b><span class="muted small">${esc(t.sub)}</span></span>
+          <span class="todo-go">${icon('next', 18)}</span></a>`).join('')}</div>`
+        : '<p class="calm">Nothing waiting. No open tastings, and no bottle is near the end of its window.</p>'}
+    </section>`;
+
+  // ---- instruments: average score and blind guesses (or the cellar when there are none)
+  const scoredYear = tasted.filter((w) => scoreOf(w) != null && inYear(dateOf(w)));
+  const scoredPool = scoredYear.length ? scoredYear : tasted.filter((w) => scoreOf(w) != null);
+  const avg = scoredPool.length ? scoredPool.reduce((n, w) => n + scoreToHundred(scoreOf(w), scaleOf(w)), 0) / scoredPool.length : null;
+  const guesses = wines.filter((w) => w.tasting && w.tasting.guessResult);
+  const gr = { right: 0, close: 0, wrong: 0 };
+  for (const w of guesses) gr[w.tasting.guessResult] = (gr[w.tasting.guessResult] || 0) + 1;
+  const inst = [];
+  if (avg != null) {
+    const p = Math.max(0, Math.min(1, (avg - 50) / 50));
+    inst.push(`<a class="instrument" href="#/standings">
+        <span class="inst-label">Average score</span>
+        <span class="gauge" style="--a:${(p * 270).toFixed(1)}deg" role="img" aria-label="Average score ${Math.round(avg)} out of 100">
+          <span class="gauge-face"><b class="gauge-num">${Math.round(avg)}</b><span class="gauge-unit">of 100</span></span></span>
+        <span class="descriptor">${esc(qualityFor(avg))}</span>
+        <span class="inst-cap">${esc(scoredYear.length ? `${plural(scoredYear.length, 'score')} in ${y}` : `${plural(scoredPool.length, 'score')} in all`)}</span>
+      </a>`);
+  }
+  if (guesses.length) {
+    const n = guesses.length;
+    const a = (gr.right / n) * 270, b = a + (gr.close / n) * 270, c = b + (gr.wrong / n) * 270;
+    inst.push(`<a class="instrument" href="#/events">
+        <span class="inst-label">Blind guesses</span>
+        <span class="gauge guess" style="--a:${a.toFixed(1)}deg;--b:${b.toFixed(1)}deg;--c:${c.toFixed(1)}deg" role="img" aria-label="${gr.right} right, ${gr.close} close, ${gr.wrong} wrong">
+          <span class="gauge-face"><b class="gauge-num">${gr.right}</b><span class="gauge-unit">of ${n} right</span></span></span>
+        <span class="descriptor">${esc(gr.right / n >= 0.6 ? 'A sharp palate' : gr.right + gr.close >= n / 2 ? 'Getting close' : 'Keep tasting blind')}</span>
+        <span class="inst-cap"><span><i class="k k-right"></i>${gr.right} right</span><span><i class="k k-close"></i>${gr.close} close</span><span><i class="k k-wrong"></i>${gr.wrong} wrong</span></span>
+      </a>`);
+  } else if (bottles.length) {
+    const ready = inCellar.filter((b) => windowStatus(b).k === 'ready').reduce((n, b) => n + (b.qty || 0), 0);
+    const p = bottleCount ? ready / bottleCount : 0;
+    inst.push(`<a class="instrument" href="#/cellar">
+        <span class="inst-label">Ready to drink</span>
+        <span class="gauge" style="--a:${(p * 270).toFixed(1)}deg" role="img" aria-label="${ready} of ${bottleCount} bottles ready to drink">
+          <span class="gauge-face"><b class="gauge-num">${ready}</b><span class="gauge-unit">of ${plural(bottleCount, 'bottle')}</span></span></span>
+        <span class="descriptor">${esc(!bottleCount ? 'The cellar is empty' : p >= 0.5 ? 'Plenty to open' : 'Mostly resting')}</span>
+        <span class="inst-cap">${esc(soon.length ? `${plural(soon.length, 'wine')} to drink soon` : 'Bottles inside their window')}</span>
+      </a>`);
+  }
+  const instruments = inst.length ? `<section class="home-sec instruments" aria-label="Instruments">${inst.join('')}</section>` : '';
+
+  // ---- the register: every kind of record, with totals
+  const lastEvent = [...events].sort((a, b) => (b.date || '').localeCompare(a.date || ''))[0];
+  const lastBottle = [...bottles].sort((a, b) => (b.purchaseDate || '').localeCompare(a.purchaseDate || '') || (b.updatedAt || 0) - (a.updatedAt || 0))[0];
+  const lastBuy = [...bottles].filter((b) => b.merchantId).sort((a, b) => (b.purchaseDate || '').localeCompare(a.purchaseDate || ''))[0];
+  const lastMerchant = lastBuy ? merchants.find((m) => m.id === lastBuy.merchantId) : null;
+  const rows = [
+    { href: '#/events', ic: 'glasses', name: 'Events', sub: events.filter((e) => e.blind).length ? `${events.filter((e) => e.blind).length} blind` : '',
+      total: events.length, unit: events.length === 1 ? 'event' : 'events', year: events.filter((e) => inYear(e.date)).length, yUnit: 'held',
+      last: lastEvent ? [lastEvent.name, lastEvent.date && fmtDate(lastEvent.date)] : null },
+    { href: '#/standings', ic: 'laurel', name: 'Tastings', sub: 'events and single wines',
+      total: tasted.length, unit: 'notes', year: tasted.filter((w) => inYear(dateOf(w))).length, yUnit: 'tasted',
+      last: tasted[0] ? [nameOf(tasted[0]), [scoreOf(tasted[0]) != null && formatScore(scoreOf(tasted[0]), scaleOf(tasted[0])), dateOf(tasted[0]) && fmtDate(dateOf(tasted[0]))].filter(Boolean).join(' · ')] : null },
+    { href: '#/mywines', ic: 'glass', name: 'My Wines', sub: 'single tastings',
+      total: singles.length, unit: singles.length === 1 ? 'wine' : 'wines', year: singles.filter((w) => inYear(w.date)).length, yUnit: 'added',
+      last: singles[0] ? [wineTitle(singles[0]), [singles[0].place, singles[0].date && fmtDate(singles[0].date)].filter(Boolean).join(' · ')] : null },
+    { href: '#/cellar', ic: 'bottle', name: 'Cellar', sub: [plural(inCellar.length, 'wine'), cellarValue ? money(cellarValue) + ' value' : ''].filter(Boolean).join(' · '),
+      total: bottleCount, unit: bottleCount === 1 ? 'bottle' : 'bottles', year: boughtYear, yUnit: 'bought',
+      last: lastBottle ? [wineTitle(lastBottle), lastBottle.purchaseDate ? 'added ' + fmtDate(lastBottle.purchaseDate) : ''] : null },
+    { href: '#/merchants', ic: 'shop', name: 'Merchants', sub: merchants.length ? '' : 'shops and importers',
+      total: merchants.length, unit: merchants.length === 1 ? 'merchant' : 'merchants', year: spentYear ? money(spentYear) : 0, yUnit: 'spent',
+      last: lastMerchant ? [lastMerchant.name, lastBuy.purchaseDate ? 'bought ' + fmtDate(lastBuy.purchaseDate) : ''] : null },
+  ];
+  const register = `<section class="home-sec" aria-labelledby="h-reg">
+      <h2 class="sec-h" id="h-reg">Your records</h2>
+      <div class="register">
+        <div class="reg-head" aria-hidden="true"><span></span><span>Total</span><span>${esc(y)}</span><span>Latest</span></div>
+        ${rows.map((r) => `<a class="reg-row" href="${r.href}" aria-label="${attr(`${r.name}: ${r.total} ${r.unit}, ${r.year} ${r.yUnit} in ${y}${r.last ? ', latest ' + r.last.filter(Boolean).join(', ') : ''}`)}">
+          <span class="reg-name"><span class="reg-ic">${icon(r.ic, 18)}</span><span><b>${esc(r.name)}</b>${r.sub ? `<span class="muted small">${esc(r.sub)}</span>` : ''}</span></span>
+          <span class="reg-num"><b>${esc(r.total)}</b><span>${esc(r.unit)}</span></span>
+          <span class="reg-num year"><b>${esc(r.year || 0)}</b><span>${esc(r.yUnit)}</span></span>
+          <span class="reg-last">${r.last ? `<span>${esc(r.last[0])}</span><span class="dateline">${esc(r.last[1] || '')}</span>` : '<span class="muted">Nothing yet</span>'}</span>
+        </a>`).join('')}
+      </div>
+    </section>`;
+
+  // ---- recent tastings, as a timeline
+  const recent = tasted.slice(0, 6);
+  const timeline = recent.length ? `<section class="home-sec" aria-labelledby="h-recent">
+      <h2 class="sec-h" id="h-recent">Recently tasted</h2>
+      <ol class="timeline">${recent.map((w) => `<li><a href="#/wine/${w.id}">
+          <span class="dateline">${esc(dateOf(w) ? fmtDate(dateOf(w)) : 'No date')}</span>
+          <span class="tl-row"><span class="tl-main"><b><span class="dot dot-${hidden(w) ? 'none' : (w.colour || 'none')}"></span>${esc(nameOf(w))}</b><span class="muted small">${esc(whereOf(w) || '')}</span></span>
+          <span class="tl-score">${scoreOf(w) != null ? esc(formatScore(scoreOf(w), scaleOf(w))) : '<i>no score</i>'}</span></span></a></li>`).join('')}</ol>
+    </section>` : '';
+
+  // ---- best of the year
+  const best = (scoredYear.length ? scoredYear : tasted.filter((w) => scoreOf(w) != null))
+    .sort((a, b) => scoreToHundred(scoreOf(b), scaleOf(b)) - scoreToHundred(scoreOf(a), scaleOf(a))).slice(0, 3);
+  const top = best.length ? `<section class="home-sec" aria-labelledby="h-top">
+      <h2 class="sec-h" id="h-top">${scoredYear.length ? `Best of ${esc(y)}` : 'Best so far'}</h2>
+      ${best.map((w, i) => `<a class="card st-row" href="#/wine/${w.id}"><span class="rank top top${i + 1}">${i + 1}</span><span class="st-name">${esc(nameOf(w))}<br><span class="muted small">${esc(whereOf(w) || '')}</span></span><span class="st-score">${esc(formatScore(scoreOf(w), scaleOf(w)))}</span></a>`).join('')}
+      <a class="more" href="#/standings">All standings ${icon('next', 16)}</a>
+    </section>` : '';
+
+  // ---- what you taste: colour split, grapes and countries (blind wines stay hidden until revealed)
+  const open = tasted.filter((w) => !hidden(w));
+  const col = { white: 0, rose: 0, red: 0 };
+  for (const w of open) if (col[w.colour] != null) col[w.colour]++;
+  const colN = col.white + col.rose + col.red;
+  const grapes = topCounts(open.flatMap((w) => String(w.grapes || '').split(/[,/&+]| and /i)));
+  const countries = topCounts(open.map((w) => w.country || ''));
+  const taste = colN ? `<section class="home-sec" aria-labelledby="h-taste">
+      <h2 class="sec-h" id="h-taste">What you taste</h2>
+      <div class="card taste">
+        <div class="split" role="img" aria-label="${attr(['white', 'rose', 'red'].map((c) => `${col[c]} ${COLOUR_LABEL[c]}`).join(', '))}">${['white', 'rose', 'red'].filter((c) => col[c]).map((c) => `<i class="sw-${c}" style="flex:${col[c]}"></i>`).join('')}</div>
+        <div class="split-key">${['white', 'rose', 'red'].map((c) => `<span><span class="dot dot-${c}"></span>${COLOUR_LABEL[c]} <b>${col[c]}</b></span>`).join('')}</div>
+        ${grapes.length || countries.length ? `<dl class="facts taste-facts">
+          ${grapes.length ? `<dt>Grapes</dt><dd>${grapes.map(([k, n]) => `${esc(k)} <span class="muted">${n}</span>`).join(' · ')}</dd>` : ''}
+          ${countries.length ? `<dt>Countries</dt><dd>${countries.map(([k, n]) => `${esc(k)} <span class="muted">${n}</span>`).join(' · ')}</dd>` : ''}
+        </dl>` : ''}
+      </div>
+    </section>` : '';
+
+  return shell(`${head}
+    <div class="home-grid">
+      <div class="home-col">${needs}</div>
+      <div class="home-col">${instruments}</div>
+    </div>
+    ${register}
+    <div class="home-grid">
+      <div class="home-col">${timeline}</div>
+      <div class="home-col">${top}${taste}</div>
+    </div>
+    ${homeFooter(mediaIds.length)}
+    <a class="fab" href="#/new">+ New tasting</a>
+  `, { title: 'Home', tab: 'home' });
+}
+
+function homeFooter(mediaCount) {
+  const level = getLevel(settings.method, settings.level);
+  const s = syncInfo();
+  return `<section class="home-sec book-facts" aria-labelledby="h-book">
+      <h2 class="sec-h" id="h-book">This book</h2>
+      <dl class="facts">
+        <dt>Method</dt><dd>${esc(getMethod(settings.method).name)} ${esc(level.name)} · ${settings.mode === 'quick' ? 'Quick' : 'Full SAT'}${settings.advanced ? ' · Advanced' : ''}</dd>
+        <dt>Media</dt><dd>${esc(plural(mediaCount, 'photo or video', 'photos and videos'))}</dd>
+        <dt>Sync</dt><dd data-sync-line>${esc(s ? s.label : 'This device only')}</dd>
+      </dl>
+      <a class="more" href="#/settings">Settings ${icon('next', 16)}</a>
+    </section>`;
 }
 
 // ---------- new tasting: event or single wine
@@ -249,7 +476,7 @@ async function viewEventForm(id) {
       <button class="btn primary" type="submit">${id ? 'Save' : 'Create event'}</button>
       ${id ? '<button class="btn danger" type="button" data-act="deleteEvent">Delete event</button>' : ''}
     </form>
-  `, { title: id ? 'Edit event' : 'New event', back: id ? `#/event/${id}` : '#/' });
+  `, { title: id ? 'Edit event' : 'New event', back: id ? `#/event/${id}` : '#/events' });
 }
 
 // The event a wine belongs to; single wines get a stand-in "My Wines" event.
@@ -296,7 +523,7 @@ function standingsList(rows, scaleOf) {
 
 async function viewEvent(id) {
   const { event, wines } = await loadEvent(id);
-  if (!event) return shell('<p class="muted center">Event not found.</p>', { title: 'Event', back: '#/' });
+  if (!event) return shell('<p class="muted center">Event not found.</p>', { title: 'Event', back: '#/events' });
   const tab = ui.eventTab[id] || 'wines';
   let body = '';
   if (tab === 'wines') {
@@ -351,7 +578,7 @@ async function viewEvent(id) {
       ${['wines', 'standings', 'notes'].map((t) => `<button data-act="eventTab" data-tab="${t}" class="${tab === t ? 'on' : ''}">${{ wines: 'Wines', standings: 'Standings', notes: 'Notes & media' }[t]}</button>`).join('')}
     </div>
     ${body}
-  `, { title: event.name, back: '#/', actions: `<a class="icon-btn" href="#/event/${id}/edit" aria-label="Edit event">${icon('pencil', 20)}</a>` });
+  `, { title: event.name, back: '#/events', actions: `<a class="icon-btn" href="#/event/${id}/edit" aria-label="Edit event">${icon('pencil', 20)}</a>` });
 }
 
 function wineDetailFields(w, { price = true } = {}) {
@@ -1119,7 +1346,7 @@ async function viewSettings() {
       <p class="muted small">Install: open this page in Safari, tap Share, then <b>Add to Home Screen</b>. It then opens full screen and works offline.</p>
       <p class="muted tiny">The WSET Systematic Approach to Tasting Wine® and Wine-Lexicons are copyright Wine & Spirit Education Trust and are used here for personal study. Publishing this app requires WSET's written permission.</p>
     </section>
-  `, { title: 'Settings', tab: 'settings' });
+  `, { title: 'Settings', back: '#/' });
 }
 
 function syncSection() {
@@ -1164,13 +1391,14 @@ async function route() {
   const y = window.scrollY;
   let html;
   try {
-    if (!p.length) html = await viewEvents();
+    if (!p.length) html = await viewHome();
+    else if (p[0] === 'events') html = await viewEvents();
     else if (p[0] === 'new') html = viewNewTasting();
     else if (p[0] === 'mywines') html = await viewMyWines();
     else if (p[0] === 'single' && p[1] === 'new') html = await viewSingleForm();
     else if (p[0] === 'single' && p[2] === 'edit') html = await viewSingleForm(p[1]);
     else if (p[0] === 'cellar' && p[1] === 'new') html = await viewBottleForm(null, p[2] === 'm' ? p[3] : null);
-    else if (p[0] === 'cellar') html = await viewCellar();
+    else if (p[0] === 'cellar') { if (p[1] === 'soon') ui.cellarFilter = 'soon'; html = await viewCellar(); }
     else if (p[0] === 'bottle' && p[2] === 'edit') html = await viewBottleForm(p[1]);
     else if (p[0] === 'bottle') html = await viewBottle(p[1]);
     else if (p[0] === 'merchants') html = await viewMerchants();
@@ -1185,7 +1413,7 @@ async function route() {
     else if (p[0] === 'event' && p[2] === 'wine' && p[4] === 'edit') html = await viewAddWine(p[1], p[3]);
     else if (p[0] === 'event') html = await viewEvent(p[1]);
     else if (p[0] === 'wine') html = await viewWine(p[1]);
-    else html = await viewEvents();
+    else html = await viewHome();
   } catch (err) {
     console.error(err);
     html = shell(`<p class="note-box">Something went wrong: ${esc(err.message)}</p>`, { title: 'Error', back: '#/' });
@@ -1392,7 +1620,7 @@ const actions = {
     await db.del('events', id);
     ui.editList = null;
     toast('Event deleted');
-    go('#/');
+    go('#/events');
   },
   async deleteWine(el) {
     const w = (el.dataset.id && await db.get('wines', el.dataset.id)) || draftWine;
