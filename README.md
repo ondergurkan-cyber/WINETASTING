@@ -6,11 +6,11 @@ It is an installable web app (PWA): plain HTML, CSS and JavaScript with no build
 
 ## What's in this prototype
 
-- **Settings:** tasting method (WSET SAT now; Beyond Flavour and CMS grids shown as "coming soon"), then the level within it: **Level 2, Level 3 (default) or Diploma (Level 4)**. Structure+ on/off, default scoring scale (100 or 20), note format, your own lexicon, backup export/import.
+- **Settings:** tasting method (WSET SAT now; Beyond Flavour and CMS grids shown as "coming soon"), then the level within it: **Level 2, Level 3 (default) or Diploma (Level 4)**. Advanced on/off (off by default), default scoring scale (100 or 20), note format, your own lexicon, backup export/import.
 - **Events:** name, date, place, scale, blind mode, host, theme. Each event has **Wines** (in tasting order, reorderable), **Standings** (sorted by your score, medals, ties share a rank) and **Notes & media** (text, photos, videos).
 - **Add wine:** label photo plus details. In a blind event the label is stored blurred and details stay hidden until **Reveal**.
 - **Tasting:** Style → Appearance → Nose → Palate → Conclusions → Wrap-up. The form is drawn from the SAT level and filtered by colour and type (tannin only for reds unless switched on, mousse only for sparkling, colour options per colour). Lexicon clusters for the wine's colour show first; the rest sit under "More clusters". Add your own descriptors. "Copy from nose" for the palate. BLIC helper suggests a quality level.
-- **Structure+ (optional):** acid shape and feel, tannin location and texture, phenolic bitterness, brightness and rim (from Beyond Flavour). Not part of the SAT; they feed the guess.
+- **Advanced (optional, off by default):** acid shape and feel, tannin location and texture, phenolic bitterness, brightness and rim (from Beyond Flavour). Not part of the SAT; they feed the guess.
 - **Wrap-up:** GUESS (ranked candidates with reasons), SCORE (suggested range from the SAT quality level), my notes, generated tasting note in three formats (WSET full, short, social) with Copy and Share, photos, and Reveal with "right / close / wrong".
 - **Standings tab on Home** across all events and My Wines, filterable by colour, event or My Wines.
 - **New tasting:** choose **Event** or **Single wine**, or open a bottle from the cellar.

@@ -364,3 +364,12 @@ textarea { resize: vertical; }
 .spin { width: 16px; height: 16px; border: 2px solid var(--line); border-top-color: var(--wine); border-radius: 50%; animation: spin .8s linear infinite; display: inline-block; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .btn[disabled] { opacity: .45; }
+
+/* delete controls */
+.row-del { border: 0; background: none; font-size: 18px; padding: 6px 10px; cursor: pointer; color: var(--danger); }
+.list-tools { display: flex; justify-content: space-between; align-items: center; margin: 4px 2px 14px; font-size: 14px; }
+.danger-link { color: var(--danger) !important; }
+.log li { display: flex; align-items: center; gap: 6px; }
+.log-del { margin-left: auto; border: 0; background: none; color: var(--muted); font-size: 12px; padding: 4px 6px; cursor: pointer; }
+.plus-box .srow-label { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+.plus-box .srow-label .link { margin-left: auto; }

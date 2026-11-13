@@ -20,7 +20,7 @@ const DEFAULT_BANDS = {
   poor: [[70, 79], [12, 14.5]],
   faulty: [[50, 69], [0, 11.5]],
 };
-const DEFAULT_SETTINGS = { method: 'wset', level: 'l3', structurePlus: true, scale: 100, noteFormat: 'full', mode: 'full', customLexicon: [], autoScan: true, currency: '€' };
+const DEFAULT_SETTINGS = { method: 'wset', level: 'l3', advanced: false, scale: 100, noteFormat: 'full', mode: 'full', customLexicon: [], autoScan: true, currency: '€' };
 
 let settings = { ...DEFAULT_SETTINGS };
 let apiKey = ''; // the user's own Anthropic key; device only, never exported
@@ -142,7 +142,7 @@ async function viewEvents() {
     </div>`;
   return shell(`
     ${homeTabs('events')}
-    <div class="method-badge">Method: <b>${esc(getMethod(settings.method).name)}</b> · ${esc(level.name)}${settings.structurePlus ? ' · Structure+' : ''} <a href="#/settings">change</a></div>
+    <div class="method-badge">Method: <b>${esc(getMethod(settings.method).name)}</b> · ${esc(level.name)}${settings.advanced ? ' · Advanced' : ''} <a href="#/settings">change</a></div>
     ${events.length ? cards : empty}
     <a class="fab" href="#/new">+ New tasting</a>
   `, { title: 'Tasting', tab: 'tasting' });
@@ -284,12 +284,13 @@ async function viewEvent(id) {
             </span>
             <span class="wc-score">${t && t.score != null && t.score !== '' ? esc(formatScore(t.score, event.scale)) : ''}</span>
           </a>
-          <span class="reorder">
+          ${ui.editList === id ? `<button class="row-del" data-act="deleteWine" data-id="${w.id}" aria-label="Delete wine ${i + 1}">🗑</button>` : `<span class="reorder">
             <button data-act="moveWine" data-id="${w.id}" data-dir="-1" ${i === 0 ? 'disabled' : ''} aria-label="Move up">▲</button>
             <button data-act="moveWine" data-id="${w.id}" data-dir="1" ${i === wines.length - 1 ? 'disabled' : ''} aria-label="Move down">▼</button>
-          </span>
+          </span>`}
         </div>`;
     }).join('') || `<div class="empty"><p><b>No wines yet.</b></p><p class="muted">Tap a style below to add wine 1. Add them in the order you'll taste them.</p></div>`;
+    body += `<div class="list-tools">${wines.length ? `<button class="link" data-act="editList">${ui.editList === id ? 'Done' : 'Delete wines…'}</button>` : '<span></span>'}<button class="link danger-link" data-act="deleteEvent">Delete event</button></div>`;
     body += `<div class="card quick-add"><div class="srow-label">Quick add <span class="muted small">· tap a style, wine ${wines.length + 1} is added</span></div>${styleTiles({}, 'quickAdd')}<div class="muted tiny">Label photo and details can be added later${event.blind ? ' or at the reveal' : ''}.</div></div>`;
     body += `<a class="fab" href="#/event/${id}/add">+ Add with label</a>`;
   } else if (tab === 'standings') {
@@ -346,6 +347,7 @@ function labelBlock(obj, label, kind, hide) {
   return `<div class="label-shot">
       ${label ? `<img src="${mediaURL(label)}" alt="Label" class="${hide ? 'blurred' : ''}">` : '<div class="label-ph">📷<br>Label photo</div>'}
       <label class="btn">${label ? 'Retake' : 'Take label photo'}<input type="file" accept="image/*" capture="environment" hidden data-upload="${kind === 'bottle' ? 'blabel' : 'label'}"></label>
+      ${label ? `<button class="btn danger" type="button" data-act="delLabel" data-kind="${kind}">Remove photo</button>` : ''}
       ${scan}
     </div>`;
 }
@@ -499,7 +501,7 @@ function segRow(f, t, opts) {
   const val = t.values[f.id];
   const cols = opts.length > 6 ? 3 : opts.length;
   return `<div class="srow" data-field="${f.id}" data-empty="${val ? 0 : 1}">
-      <div class="srow-label">${esc(f.label)}${f.plus ? ' <span class="plus-tag">S+</span>' : ''}</div>
+      <div class="srow-label">${esc(f.label)}</div>
       <div class="seg-bar" style="grid-template-columns: repeat(${cols}, minmax(0, 1fr))">${opts.map((o) => `<button class="${val === o ? 'on' : ''}" data-act="pick" data-f="${f.id}" data-v="${attr(o)}" aria-label="${attr(o)}">${esc(short(o))}</button>`).join('')}</div>
     </div>`;
 }
@@ -507,7 +509,7 @@ function segRow(f, t, opts) {
 function multiRow(f, t) {
   const arr = t.values[f.id] || [];
   return `<div class="srow" data-field="${f.id}">
-      <div class="srow-label">${esc(f.label)} <span class="muted small">· optional${f.plus ? ', Structure+' : ''}</span></div>
+      <div class="srow-label">${esc(f.label)} <span class="muted small">· optional${f.plus ? ', Advanced' : ''}</span></div>
       <div class="chips">${f.options.map((o) => `<button class="chip ${arr.includes(o) ? 'on' : ''}" data-act="toggle" data-f="${f.id}" data-v="${attr(o)}">${esc(o)}</button>`).join('')}</div>
     </div>`;
 }
@@ -628,9 +630,9 @@ function renderSection(sec, level, w, t, event, idx, wines) {
     for (const f of mainFields) body += renderSheetField(f, t, w, level);
   }
   if (plusFields.length) {
-    const open = ui.open['plus' + key] || plusFields.some((f) => isFilled(f, t));
-    body += open ? `<div class="plus-box"><div class="srow-label">Structure+ <span class="muted small">· Beyond Flavour, optional</span></div>${plusFields.map((f) => renderSheetField(f, t, w, level)).join('')}</div>`
-      : `<button class="plus-toggle" data-act="plusOpen" data-k="${key}"><span><b>Structure+</b> <span class="muted small">${plusFields.map((f) => f.label.toLowerCase()).slice(0, 2).join(', ')}…</span></span><span class="link">Show ›</span></button>`;
+    const open = ui.open['plus' + key] || (!(ui.plusHidden || {})[key] && plusFields.some((f) => isFilled(f, t)));
+    body += open ? `<div class="plus-box"><div class="srow-label">Advanced <span class="muted small">· Beyond Flavour, not part of the WSET SAT</span> <button class="link" data-act="plusClose" data-k="${key}">Hide ▴</button></div>${plusFields.map((f) => renderSheetField(f, t, w, level)).join('')}</div>`
+      : `<button class="plus-toggle" data-act="plusOpen" data-k="${key}"><span><b>Advanced</b> <span class="muted small">${plusFields.map((f) => f.label.toLowerCase()).slice(0, 2).join(', ')}…</span></span><span class="link">Show ›</span></button>`;
   }
   const foldBtn = prog.done ? `<button class="link" data-act="fold" data-k="${key}">Done ▴</button>` : `<span class="muted small">${prog.filled}/${prog.total}</span>`;
   return `<section class="sec open" id="sec-${sec.id}">
@@ -764,7 +766,8 @@ async function wrapExtras(w, t, level, event, idx, wines) {
     ${guessPanel}${notePanel}${reveal}
     <button class="btn primary big-btn" data-act="finish">${t.done ? 'Save changes' : 'Finish & save'}</button>
     ${next ? `<button class="btn" data-act="finish" data-next="${next.id}">Save & taste wine ${wines.indexOf(next) + 1} ›</button>` : ''}
-    <p class="muted tiny center">Your taps are saved automatically as you go.</p>`;
+    <p class="muted tiny center">Your taps are saved automatically as you go.</p>
+    <button class="btn danger" data-act="deleteWine" data-id="${w.id}">Delete this wine</button>`;
 }
 
 // ---------- global standings
@@ -916,7 +919,8 @@ async function viewBottle(id) {
       ${b.notes ? `<p class="small">${esc(b.notes)}</p>` : ''}</div>
     <div class="field-label">Tastings from this wine</div>
     ${tastings.length ? tastings.map((w) => `<a class="card st-row" href="#/wine/${w.id}"><span class="st-name">${esc(fmtDate(w.date))}${w.place ? `<br><span class="muted small">${esc(w.place)}</span>` : ''}</span><span class="st-score">${w.tasting && w.tasting.score != null && w.tasting.score !== '' ? esc(formatScore(w.tasting.score, w.scale || 100)) : ''}</span></a>`).join('') : '<p class="muted small">None yet. Opening a bottle starts a tasting in My Wines.</p>'}
-    ${(b.log || []).length ? `<div class="field-label">History</div><ul class="log">${b.log.slice().reverse().slice(0, 12).map((l) => `<li><span class="muted small">${esc(fmtDate(l.date))}</span> ${esc(l.note)}</li>`).join('')}</ul>` : ''}
+    ${(b.log || []).length ? `<div class="field-label">History</div><ul class="log">${b.log.map((l, i) => ({ l, i })).reverse().slice(0, 12).map(({ l, i }) => `<li><span class="muted small">${esc(fmtDate(l.date))}</span> ${esc(l.note)}<button class="log-del" data-act="delLog" data-i="${i}" aria-label="Delete entry">✕</button></li>`).join('')}</ul>` : ''}
+    <button class="btn danger" data-act="deleteBottle" data-id="${id}">Delete from cellar</button>
   `, { title: 'Bottle', back: '#/cellar', actions: `<a class="icon-btn" href="#/bottle/${id}/edit" aria-label="Edit">✎</a>` });
 }
 
@@ -991,6 +995,7 @@ async function viewMerchant(id) {
     <div class="field-label">Purchases</div>
     ${purchases.map((b) => `<a class="card st-row" href="#/bottle/${b.id}"><span class="dot dot-${b.colour || 'none'}"></span><span class="st-name">${esc(wineTitle(b))}<br><span class="muted small">${esc([fmtDate(b.purchaseDate), `${b.bought ?? b.qty ?? 0} × ${money(num(b.price)) || '?'}`].filter(Boolean).join(' · '))}</span></span><span class="muted small">${b.qty || 0} left</span></a>`).join('') || '<p class="muted small">Nothing bought here yet.</p>'}
     <a class="btn primary" href="#/cellar/new/m/${id}">+ Add bottles bought here</a>
+    <button class="btn danger" data-act="deleteMerchant" data-id="${id}">Delete merchant</button>
   `, { title: m.name, back: '#/merchants', actions: `<a class="icon-btn" href="#/merchant/${id}/edit" aria-label="Edit merchant">✎</a>` });
 }
 
@@ -1016,8 +1021,8 @@ async function viewSettings() {
     </section>
     <section class="set-sec">
       <h2>Options</h2>
-      <label class="switch-row"><span><b>Structure+ panel</b><br><span class="muted small">Extra Beyond Flavour fields: acid shape, tannin location and texture, bitterness, brightness. Sharpens GUESS.</span></span>
-        <input type="checkbox" ${settings.structurePlus ? 'checked' : ''} data-act-change="structurePlus"><i></i></label>
+      <label class="switch-row"><span><b>Advanced</b><br><span class="muted small">Off = the pure ${esc(method.name)} as taught. On = an extra <b>Advanced</b> panel in Look and Taste with Beyond Flavour fields (acid shape, tannin location and texture, bitterness, brightness). They are not part of the WSET SAT and need their own training. They also sharpen GUESS. Works with any level.</span></span>
+        <input type="checkbox" ${settings.advanced ? 'checked' : ''} data-act-change="advanced"><i></i></label>
       <div class="field-label">Default scoring scale</div>
       <div class="seg">${[100, 20].map((s) => `<label><input type="radio" name="scale" value="${s}" ${settings.scale === s ? 'checked' : ''} data-act-change="scale"><span>${s} points</span></label>`).join('')}</div>
       <div class="field-label">Default tasting mode</div>
@@ -1155,6 +1160,7 @@ const actions = {
   async unfold(el) { ui.unfold[el.dataset.k] = true; rerender(); },
   async fold(el) { ui.unfold[el.dataset.k] = false; rerender(); },
   async plusOpen(el) { ui.open['plus' + el.dataset.k] = true; rerender(); },
+  async plusClose(el) { ui.open['plus' + el.dataset.k] = false; ui.plusHidden = { ...(ui.plusHidden || {}), [el.dataset.k]: true }; rerender(); },
   async wheel(el) { ui.open['wheel' + el.dataset.k] = !ui.open['wheel' + el.dataset.k]; rerender(); },
   async noteToggle() { const id = currentWineId(); ui.noteOpen = ui.noteOpen === id ? null : id; rerender(); },
   async jump(el) {
@@ -1261,15 +1267,44 @@ const actions = {
   },
   async deleteEvent() {
     const id = currentEventId();
-    if (!(await ask('Delete this event and all its wines?', 'Delete'))) return;
-    for (const w of await db.byIndex('wines', 'eventId', id)) await db.del('wines', w.id);
+    const ws = await db.byIndex('wines', 'eventId', id);
+    if (!(await ask(`Delete this event${ws.length ? ` and its ${ws.length} wine${ws.length === 1 ? '' : 's'}` : ''}, with notes and photos? This cannot be undone.`, 'Delete'))) return;
+    for (const w of ws) await removeWine(w);
+    await removeMediaOf('event:' + id);
     await db.del('events', id);
+    ui.editList = null;
+    toast('Event deleted');
     go('#/');
   },
-  async deleteWine() {
-    if (!(await ask('Delete this wine and its tasting?', 'Delete'))) return;
-    await db.del('wines', draftWine.id);
-    go(backFor(draftWine));
+  async deleteWine(el) {
+    const w = (el.dataset.id && await db.get('wines', el.dataset.id)) || draftWine;
+    if (!w) return;
+    if (!(await ask('Delete this wine, its tasting and photos? This cannot be undone.', 'Delete'))) return;
+    await removeWine(w);
+    if (w.eventId) { // keep the tasting order 1, 2, 3…
+      const rest = (await db.byIndex('wines', 'eventId', w.eventId)).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+      for (let i = 0; i < rest.length; i++) if (rest[i].order !== i) { rest[i].order = i; await db.put('wines', rest[i]); }
+    }
+    toast('Wine deleted');
+    const back = backFor(w);
+    if (location.hash === back) rerender(); else go(back);
+  },
+  async editList() { const id = currentEventId(); ui.editList = ui.editList === id ? null : id; rerender(); },
+  async delLabel(el) {
+    const isBottle = el.dataset.kind === 'bottle';
+    if (isBottle) readBottleForm(); else readWineForm();
+    const obj = isBottle ? draftBottle : draftWine;
+    if (!obj || !obj.labelId || !(await ask('Remove the label photo?', 'Remove'))) return;
+    await db.del('media', obj.labelId);
+    obj.labelId = null;
+    ui.scanState = null;
+    if (await db.get(isBottle ? 'bottles' : 'wines', obj.id)) await db.put(isBottle ? 'bottles' : 'wines', obj);
+    rerender();
+  },
+  async delLog(el) {
+    const b = await db.get('bottles', currentId('bottle'));
+    b.log.splice(+el.dataset.i, 1);
+    await db.put('bottles', b); rerender();
   },
   async delLex(el) { settings.customLexicon = settings.customLexicon.filter((d) => d !== el.dataset.v); await saveSettings(); rerender(); },
   async export() {
@@ -1318,14 +1353,18 @@ const actions = {
     toast('Enjoy! Tasting started.');
     go(`#/wine/${w.id}`);
   },
-  async deleteBottle() {
+  async deleteBottle(el) {
+    const id = el.dataset.id || draftBottle.id;
     if (!(await ask('Delete this wine from your cellar? Tastings you made from it are kept.', 'Delete'))) return;
-    await db.del('bottles', draftBottle.id);
+    const b = await db.get('bottles', id);
+    if (b && b.labelId) await db.del('media', b.labelId);
+    await db.del('bottles', id);
+    toast('Deleted from cellar');
     go('#/cellar');
   },
   async newMerchantFromBottle() { readBottleForm(); ui.merchantReturn = location.hash; go('#/merchant/new'); },
-  async deleteMerchant() {
-    const id = $app.querySelector('#merchantForm').dataset.id;
+  async deleteMerchant(el) {
+    const id = el.dataset.id || $app.querySelector('#merchantForm').dataset.id;
     if (!(await ask('Delete this merchant? Bottles bought there stay in your cellar.', 'Delete'))) return;
     for (const b of (await db.all('bottles')).filter((x) => x.merchantId === id)) { b.merchantId = ''; await db.put('bottles', b); }
     await db.del('merchants', id);
@@ -1351,7 +1390,7 @@ const actions = {
 const changeActions = {
   async method(el) { settings.method = el.value; settings.level = getMethod(el.value).defaultLevel; await saveSettings(); rerender(); },
   async level(el) { settings.level = el.value; await saveSettings(); rerender(); },
-  async structurePlus(el) { settings.structurePlus = el.checked; await saveSettings(); },
+  async advanced(el) { settings.advanced = el.checked; await saveSettings(); },
   async scale(el) { settings.scale = +el.value; await saveSettings(); },
   async noteFormat(el) { settings.noteFormat = el.value; ui.noteFormat = null; await saveSettings(); },
   async defaultMode(el) { settings.mode = el.value; await saveSettings(); },
@@ -1512,6 +1551,17 @@ async function runScan(kind) {
   rerender();
 }
 
+async function removeMediaOf(owner) {
+  for (const m of await db.byIndex('media', 'owner', owner)) await db.del('media', m.id);
+}
+// A wine goes with its label and photos. A cellar bottle it came from is kept.
+async function removeWine(w) {
+  await removeMediaOf('wine:' + w.id);
+  await removeMediaOf('label:' + w.id);
+  if (w.labelId) await db.del('media', w.labelId);
+  await db.del('wines', w.id);
+}
+
 async function handleUpload(el) {
   const files = [...el.files];
   if (!files.length) return;
@@ -1554,6 +1604,7 @@ async function handleImport(el) {
 async function boot() {
   settings = { ...DEFAULT_SETTINGS, ...(await db.getKV('settings', {})) };
   settings.customLexicon = settings.customLexicon || [];
+  if ('structurePlus' in settings) { delete settings.structurePlus; await saveSettings(); } // replaced by 'advanced' (off by default)
   apiKey = (await db.getKV('apiKey', '')) || '';
   window.addEventListener('hashchange', route);
   await route();

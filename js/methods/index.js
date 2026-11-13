@@ -21,7 +21,7 @@ export function fieldsFor(level, sectionId, wine, settings, tasting) {
   const sec = level.sections.find((s) => s.id === sectionId);
   if (!sec) return [];
   let fields = [...sec.fields];
-  if (settings.structurePlus && level.structurePlus[sectionId]) {
+  if (settings.advanced && level.structurePlus[sectionId]) {
     // Insert Structure+ fields before the lexicon field (or at end).
     const extra = level.structurePlus[sectionId];
     const idx = fields.findIndex((f) => f.type === 'lexicon');
