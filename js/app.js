@@ -581,7 +581,7 @@ function wineDetailFields(w, { price = true } = {}) {
     ${price ? `<label>Price / notes<input name="price" value="${attr(w.price)}"></label>` : ''}`;
 }
 
-// Label photo with camera button and the AI scan button/status.
+// Label photo: take one with the camera or add one from the photo library, then the AI scan button/status.
 function labelBlock(obj, label, kind, hide) {
   const st = ui.scanState && ui.scanState.id === obj.id ? ui.scanState : null;
   let scan = '';
@@ -592,7 +592,10 @@ function labelBlock(obj, label, kind, hide) {
   }
   return `<div class="label-shot">
       ${label ? `<img src="${mediaURL(label)}" alt="Label" class="${hide ? 'blurred' : ''}">` : `<div class="label-ph">${icon('camera', 30)}<br>Label photo</div>`}
-      <label class="btn">${label ? 'Retake' : 'Take label photo'}<input type="file" accept="image/*" capture="environment" hidden data-upload="${kind === 'bottle' ? 'blabel' : 'label'}"></label>
+      <div class="row2 label-pick">
+        <label class="btn">${icon('camera', 18)} ${label ? 'Retake' : 'Take photo'}<input type="file" accept="image/*" capture="environment" hidden data-upload="${kind === 'bottle' ? 'blabel' : 'label'}"></label>
+        <label class="btn">${icon('plus', 18)} ${label ? 'Choose another' : 'Add photo'}<input type="file" accept="image/*" hidden data-upload="${kind === 'bottle' ? 'blabel' : 'label'}"></label>
+      </div>
       ${label ? `<button class="btn danger" type="button" data-act="delLabel" data-kind="${kind}">Remove photo</button>` : ''}
       ${scan}
     </div>`;

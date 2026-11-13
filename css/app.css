@@ -987,3 +987,6 @@ html, body { overflow-x: clip; }
 .cellar-switch { margin: 0 0 14px; }
 .cellar-switch > a { flex: 1; display: flex; align-items: center; justify-content: center; min-height: 44px; border-radius: var(--r-xs); color: var(--ink); font-family: var(--f-label); font-weight: 600; font-size: 0.75rem; letter-spacing: 0.1em; text-transform: uppercase; }
 .cellar-switch > a.on { background: var(--card); color: var(--wine); box-shadow: var(--shadow); }
+/* label photo: Take photo (camera) beside Add photo (library) */
+.label-pick { margin: 10px 0 8px; }
+.label-pick .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px; }
