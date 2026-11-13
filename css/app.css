@@ -731,3 +731,4 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
 .sync-card .sync-mark { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; flex: none; border-radius: 50%; background: var(--sunk); }
 .sync-sec .btn .ic { vertical-align: -3px; }
 .sync-warn { color: var(--danger); }
+.link-btn { display: block; margin: 10px auto 0; background: none; border: 0; box-shadow: none; color: var(--wine); text-decoration: underline; text-underline-offset: 3px; min-height: 44px; }

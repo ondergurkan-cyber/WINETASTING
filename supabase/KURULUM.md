@@ -48,3 +48,11 @@ Tüm cihazlarında giriş yaptıktan sonra **Authentication → Sign In / Provid
   projeyi açıp **Restore** demek yeterli. Bu sırada uygulama cihazda çalışmaya devam eder.
 - Anthropic API anahtarın senkronlanmaz, her cihazda ayrı girilir.
 - Aynı kaydı iki cihazda farklı değiştirirsen, en son yapılan değişiklik geçerli olur.
+
+## Şifremi unuttum / e-posta bağlantıları
+E-postadaki bağlantıların uygulamayı açması için bir kez:
+**Authentication → URL Configuration → Site URL** alanına `https://ondergurkan-cyber.github.io/WINETASTING/`
+yaz ve **Save**. Sonra uygulamada **Settings → Your devices → Forgot password?** ile yeni şifre alabilirsin.
+
+Panelden de yapılabilir: **Authentication → Users**, kullanıcının satırındaki **⋯** menüsü.
+Ya da kullanıcıyı silip **Add user → Create new user** ile (**Auto Confirm User** işaretli) yeniden oluştur.

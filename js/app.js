@@ -43,7 +43,7 @@ function toast(msg) {
   t.textContent = msg;
   document.body.appendChild(t);
   setTimeout(() => t.classList.add('show'), 10);
-  setTimeout(() => { t.classList.remove('show'); setTimeout(() => t.remove(), 300); }, 1800);
+  setTimeout(() => { t.classList.remove('show'); setTimeout(() => t.remove(), 300); }, Math.max(1800, msg.length * 60));
 }
 
 
@@ -1125,14 +1125,22 @@ async function viewSettings() {
 function syncSection() {
   if (!sync.configured()) return '';
   const x = sync.state();
+  if (x.signedIn && ui.recovery) return `
+    <section class="set-sec sync-sec" id="sync">
+      <h2>Your devices</h2>
+      <p class="muted small">Signed in as <b>${esc(x.email)}</b>. Choose a new password, then use it to sign in on your other devices.</p>
+      <label class="block-label">New password<input id="syncNewPass" type="password" autocomplete="new-password" minlength="6"></label>
+      <div class="row2"><button class="btn primary" data-act="setPassword">Save new password</button><button class="btn" data-act="skipPassword">Later</button></div>
+    </section>`;
   if (!x.signedIn) return `
     <section class="set-sec sync-sec" id="sync">
       <h2>Your devices</h2>
       <p class="muted small">Sign in on each iPhone, iPad and computer with the same email and password. Events, wines, cellar, merchants, photos and settings then stay the same everywhere. It keeps working without signal and catches up when you are back online. What is already on this device is added to your account, nothing is lost. Your API key stays on each device.</p>
       ${x.message ? `<p class="small sync-warn">${esc(x.message)}</p>` : ''}
-      <label class="block-label">Email<input id="syncEmail" type="email" autocomplete="username" autocapitalize="off" spellcheck="false" inputmode="email"></label>
+      <label class="block-label">Email<input id="syncEmail" type="email" value="${attr(ui.syncEmail || '')}" autocomplete="username" autocapitalize="off" spellcheck="false" inputmode="email"></label>
       <label class="block-label">Password<input id="syncPass" type="password" autocomplete="current-password" minlength="6"></label>
       <div class="row2"><button class="btn primary" data-act="signIn">Sign in</button><button class="btn" data-act="signUp">Create account</button></div>
+      <button class="btn link-btn" data-act="forgotPassword">Forgot password?</button>
     </section>`;
   const i = syncInfo(x);
   return `
@@ -1149,6 +1157,7 @@ function syncSection() {
 
 // ---------------------------------------------------------------- router
 async function route() {
+  if (/(access_token|error_description)=/.test(location.hash) && await emailLink()) return route();
   const h = location.hash.replace(/^#/, '') || '/';
   const p = h.split('/').filter(Boolean);
   const keepScroll = route.lastHash === h;
@@ -1501,6 +1510,19 @@ const actions = {
     await db.clearAll(); settings = { ...DEFAULT_SETTINGS, customLexicon: [] }; apiKey = ''; go('#/'); rerender();
   },
   async signIn() { await account('in'); },
+  async forgotPassword() {
+    const email = (document.getElementById('syncEmail').value || '').trim();
+    if (!email) { toast('Type your email above first.'); return; }
+    try { await sync.resetPassword(email); toast('Email sent. Open the link in it and choose a new password, then sign in with it on every device.'); }
+    catch (e) { toast(authMessage(e)); }
+  },
+  async setPassword() {
+    const p = document.getElementById('syncNewPass').value || '';
+    if (p.length < 6) { toast('Use at least 6 characters.'); return; }
+    try { await sync.setPassword(p); ui.recovery = false; toast('New password saved.'); rerender(); }
+    catch (e) { toast(authMessage(e)); }
+  },
+  async skipPassword() { ui.recovery = false; rerender(); },
   async signUp() { await account('up'); },
   async signOut() {
     if (!(await ask('Sign out on this device? Your data stays here and in your account, but this device stops syncing.', 'Sign out'))) return;
@@ -1512,6 +1534,7 @@ const actions = {
 async function account(kind) {
   const email = (document.getElementById('syncEmail').value || '').trim();
   const pass = document.getElementById('syncPass').value || '';
+  ui.syncEmail = email;
   if (!email || pass.length < 6) { toast('Enter your email and a password of at least 6 characters.'); return; }
   toast(kind === 'up' ? 'Creating your account…' : 'Signing in…');
   try {
@@ -1520,11 +1543,29 @@ async function account(kind) {
       if (r === 'confirm') { toast('Check your email and tap the link, then sign in here.'); return; }
     } else await sync.signIn(email, pass);
     toast('Signed in. Your devices now share data.');
-  } catch (e) {
-    toast(/invalid login/i.test(e.message) ? 'Wrong email or password.' : /fetch|network/i.test(e.message) ? 'No connection. Try again when online.' : e.message);
-  }
+  } catch (e) { toast(authMessage(e)); return; }
   await reloadSettings();
   rerender();
+}
+
+function authMessage(e) {
+  const m = e.message || '';
+  if (/invalid login/i.test(m)) return 'Wrong email or password. If you never confirmed the account, or forgot the password, tap Forgot password.';
+  if (/not confirmed/i.test(m)) return 'Your email is not confirmed yet. Open the link in the email from Supabase, or ask to have Confirm email turned off.';
+  if (/already registered|already exists/i.test(m)) return 'This email already has an account. Tap Sign in instead.';
+  if (/rate limit|too many/i.test(m)) return 'Too many tries. Wait a few minutes and try again.';
+  if (/fetch|network|load failed/i.test(m)) return 'No connection. Try again when online.';
+  return m;
+}
+
+// Links in Supabase emails (new password, confirm email) open the app with the session in the URL.
+async function emailLink() {
+  const link = await sync.fromEmailLink();
+  if (!link) return false;
+  if (link === 'recovery') ui.recovery = true;
+  else if (link === 'signin') setTimeout(() => toast('Signed in. Your devices now share data.'), 300);
+  else setTimeout(() => toast('That email link did not work: ' + link), 300);
+  return true;
 }
 
 async function reloadSettings() {
@@ -1772,6 +1813,7 @@ async function boot() {
   window.addEventListener('hashchange', route);
   sync.subscribe(paintSync);
   await sync.init(onRemoteChange);
+  await emailLink();
   await route();
   requestPersistence();
   if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
