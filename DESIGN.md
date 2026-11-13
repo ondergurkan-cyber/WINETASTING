@@ -231,7 +231,7 @@ Dark mode is a candle-lit cellar, not a grey UI. Every light token has a dark pa
 
 **Character:** a wine-label Caslon for names and numbers, a 1920s geometric sans for small engraved-looking labels, and the native iOS face for everything you read or type at speed. The italic Caslon is the voice of the taster.
 
-All web fonts are free (SIL Open Font License) and must be self-hosted in the app so it keeps working offline. Load only the weights listed here.
+All web fonts are free (SIL Open Font License) and must be self-hosted in the app so it keeps working offline. Load only the weights listed here. Every face must ship both its **latin** and **latin-ext** subsets (split by `unicode-range`), so Turkish (ç ğ ı İ ö ş ü) and other European names render in the same face instead of falling back to Georgia. Any future font must cover Latin Extended-A.
 
 ### Hierarchy
 - **Display** (400, 2.5rem, 1.05): screen titles on the big screens (Home, an event name, a wine's name on its sheet). One per screen.
