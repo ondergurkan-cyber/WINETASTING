@@ -976,3 +976,14 @@ html, body { overflow-x: clip; }
 .taste-glass .tg-wine.sw-white { fill: var(--white-wine); }
 .taste-glass .tg-wine.sw-rose { fill: var(--rose-wine); }
 .taste-glass .tg-wine.sw-red { fill: var(--red-wine); }
+
+/* tab bar labels, 2026-11-13: fixed px size so iOS larger text cannot push the five names into each other,
+   lighter tracking on phones, and an ellipsis as the last safety net */
+.tabbar a { font-size: 11px; letter-spacing: 0.08em; padding-left: 1px; padding-right: 1px; max-width: 110px; }
+.tabbar .tl { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+@media (min-width: 600px) { .tabbar a { font-size: 0.75rem; letter-spacing: 0.1em; } }
+@media (max-width: 359px) { .tabbar a { letter-spacing: 0.03em; } }
+/* Cellar: Bottles | Merchants switch, same pill as the other segmented controls */
+.cellar-switch { margin: 0 0 14px; }
+.cellar-switch > a { flex: 1; display: flex; align-items: center; justify-content: center; min-height: 44px; border-radius: var(--r-xs); color: var(--ink); font-family: var(--f-label); font-weight: 600; font-size: 0.75rem; letter-spacing: 0.1em; text-transform: uppercase; }
+.cellar-switch > a.on { background: var(--card); color: var(--wine); box-shadow: var(--shadow); }

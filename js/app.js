@@ -100,11 +100,10 @@ function bandFor(quality, scale) {
 function shell(content, { title, back, tab, actions = '' } = {}) {
   const tabs = tab ? `
     <nav class="tabbar" aria-label="Main">
-      <a href="#/" class="${tab === 'home' ? 'on' : ''}"${tab === 'home' ? ' aria-current="page"' : ''}><span class="ti">${icon('home')}</span>Home</a>
-      <a href="#/events" class="${tab === 'tasting' ? 'on' : ''}"${tab === 'tasting' ? ' aria-current="page"' : ''}><span class="ti">${icon('glass')}</span>Tasting</a>
-      <a href="#/cellar" class="${tab === 'cellar' ? 'on' : ''}"${tab === 'cellar' ? ' aria-current="page"' : ''}><span class="ti">${icon('bottle')}</span>Cellar</a>
-      <a href="#/merchants" class="${tab === 'merchants' ? 'on' : ''}"${tab === 'merchants' ? ' aria-current="page"' : ''}><span class="ti">${icon('shop')}</span>Merchants</a>
-      <a href="#/standings" class="${tab === 'standings' ? 'on' : ''}"${tab === 'standings' ? ' aria-current="page"' : ''}><span class="ti">${icon('laurel')}</span>Standings</a>
+      <a href="#/" class="${tab === 'home' ? 'on' : ''}"${tab === 'home' ? ' aria-current="page"' : ''}><span class="ti">${icon('home')}</span><span class="tl">Home</span></a>
+      <a href="#/events" class="${tab === 'tasting' ? 'on' : ''}"${tab === 'tasting' ? ' aria-current="page"' : ''}><span class="ti">${icon('glass')}</span><span class="tl">Tasting</span></a>
+      <a href="#/cellar" class="${tab === 'cellar' ? 'on' : ''}"${tab === 'cellar' ? ' aria-current="page"' : ''}><span class="ti">${icon('bottle')}</span><span class="tl">Cellar</span></a>
+      <a href="#/standings" class="${tab === 'standings' ? 'on' : ''}"${tab === 'standings' ? ' aria-current="page"' : ''}><span class="ti">${icon('laurel')}</span><span class="tl">Standings</span></a>
     </nav>` : '';
   return `
     <header class="topbar">
@@ -1082,6 +1081,11 @@ function windowStatus(b) {
   return { k: '', label: '' };
 }
 
+// Cellar holds two books: the bottles and the merchants they came from
+function cellarSwitch(on) {
+  return `<nav class="seg cellar-switch" aria-label="Cellar">${[['bottles', '#/cellar', 'Bottles'], ['merchants', '#/merchants', 'Merchants']].map(([k, h, l]) => `<a href="${h}" class="${on === k ? 'on' : ''}"${on === k ? ' aria-current="page"' : ''}>${l}</a>`).join('')}</nav>`;
+}
+
 async function viewCellar() {
   const bottles = await db.all('bottles');
   const f = ui.cellarFilter;
@@ -1105,6 +1109,7 @@ async function viewCellar() {
   const empty = f === 'in' ? `<div class="empty"><div class="empty-icon">${engraving('bottle')}</div><p><b>Your cellar is empty.</b></p><p class="muted">Add bottles with a label photo. Track how many you have, where they are, what you paid and when to drink them.</p></div>`
     : `<p class="muted center">${f === 'soon' ? 'Nothing needs drinking soon.' : 'No finished bottles yet.'}</p>`;
   return shell(`
+    ${cellarSwitch('bottles')}
     <div class="stats"><div><b>${count}</b><span>bottles</span></div><div><b>${inCellar.length}</b><span>wines</span></div><div><b>${esc(money(value) || '–')}</b><span>value</span></div></div>
     <div class="seg seg-tabs">${[['in', 'In cellar'], ['soon', `Drink soon${soon.length ? ` (${soon.length})` : ''}`], ['gone', 'Finished']].map(([k, l]) => `<button data-act="cellarFilter" data-v="${k}" class="${f === k ? 'on' : ''}">${l}</button>`).join('')}</div>
     ${list.length ? cards : empty}
@@ -1220,7 +1225,7 @@ async function viewMerchants() {
       </a>`;
   }).join('');
   const empty = `<div class="empty"><div class="empty-icon">${engraving('shop')}</div><p><b>No merchants yet.</b></p><p class="muted">Keep the shops, importers and producers you buy from: contacts, what you bought there and what you paid.</p></div>`;
-  return shell(`${ms.length ? cards : empty}<a class="fab" href="#/merchant/new">+ New merchant</a>`, { title: 'Merchants', tab: 'merchants' });
+  return shell(`${cellarSwitch('merchants')}${ms.length ? cards : empty}<a class="fab" href="#/merchant/new">+ New merchant</a>`, { title: 'Cellar', tab: 'cellar' });
 }
 
 async function viewMerchantForm(id) {
@@ -1306,7 +1311,7 @@ async function viewSettings() {
       <p class="muted small">Reads producer, wine, vintage, region, grapes and ABV from a label photo, using Claude. It needs your own Anthropic API key (create one at console.anthropic.com, under API keys). The key stays on this device only. It is not part of backups and is sent only to Anthropic. Each scan costs about one US cent.</p>
       ${apiKey ? `<p class="small key-ok">${icon('check', 16)} Key saved (…${esc(apiKey.slice(-4))})</p>
         <div class="row2"><button class="btn" data-act="testKey">Test key</button><button class="btn danger" data-act="removeKey">Remove key</button></div>`
-        : `<label class="block-label">API key<input id="apiKeyInput" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="sk-ant-…"></label>
+        : `<label class="block-label">Anthropic API key<input id="apiKeyInput" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="sk-ant-…"></label>
         <button class="btn primary" data-act="saveKey">Save key</button>`}
       <label class="switch-row"><span><b>Read labels automatically</b><br><span class="muted small">Scan as soon as you take a label photo.</span></span>
         <input type="checkbox" ${settings.autoScan ? 'checked' : ''} data-act-change="autoScan"><i></i></label>
@@ -1736,6 +1741,9 @@ const actions = {
   async saveKey() {
     const v = ($app.querySelector('#apiKeyInput').value || '').trim();
     if (!v) return;
+    // Sync never needs a key from the user; a Supabase key pasted here is the usual mix-up.
+    if (/^sb_|^eyJ/.test(v)) { toast('That is a Supabase key. Sync needs no key, just sign in. Label scan needs an Anthropic key (starts with sk-ant-).'); return; }
+    if (!v.startsWith('sk-ant-')) { toast('Anthropic keys start with sk-ant-. Copy it again from console.anthropic.com.'); return; }
     try { await testKey(v); } catch (e) { toast(e.message); return; }
     apiKey = v; await db.setKV('apiKey', v); toast('Key saved. Label scan is on.'); rerender();
   },
