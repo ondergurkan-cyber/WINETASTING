@@ -4,6 +4,7 @@ import { generateNote, wineTitle, formatScore } from './note.js';
 import { guess, explain } from './guess.js';
 import { scanLabel, testKey } from './scan.js';
 import { icon, engraving } from './icons.js';
+import * as sync from './sync.js';
 
 // ---------------------------------------------------------------- helpers
 const $app = document.getElementById('app');
@@ -106,12 +107,47 @@ function shell(content, { title, back, tab, actions = '' } = {}) {
     </nav>` : '';
   return `
     <header class="topbar">
-      ${back ? `<a class="back" href="${back}" aria-label="Back">${icon('back', 22)}</a>` : '<span class="back-spacer"></span>'}
+      ${back ? `<a class="back" href="${back}" aria-label="Back">${icon('back', 22)}</a>` : syncMark()}
       <h1>${esc(title || 'Tasting')}</h1>
       <div class="top-actions">${actions}</div>
     </header>
     <main class="${tab ? 'with-tabs' : ''}">${content}</main>
     ${tabs}`;
+}
+
+// Small cloud in the top-left corner of the main screens: is this device in step with the others?
+function syncInfo(x = sync.state()) {
+  if (!sync.configured() || x.status === 'off') return null;
+  if (!x.signedIn) return { cls: 'out', label: 'Not syncing. Sign in to share data across your devices.' };
+  if (x.status === 'syncing') return { cls: 'busy', label: x.progress || 'Syncing…' };
+  if (x.status === 'offline') return { cls: 'wait', label: x.pending ? `Offline. ${x.pending} change${x.pending === 1 ? '' : 's'} will sync when you are back online.` : 'Offline. Changes will sync when you are back online.' };
+  if (x.status === 'error') return { cls: 'err', label: 'Sync problem: ' + (x.message || 'unknown') };
+  if (x.pending) return { cls: 'wait', label: `${x.pending} change${x.pending === 1 ? '' : 's'} waiting to sync` };
+  return { cls: 'ok', label: x.lastSync ? 'Synced ' + ago(x.lastSync) : 'Synced' };
+}
+function ago(t) {
+  const s = Math.round((Date.now() - t) / 1000);
+  if (s < 45) return 'just now';
+  const m = Math.round(s / 60);
+  if (m < 60) return `${m} min ago`;
+  const h = Math.round(m / 60);
+  if (h < 24) return `${h} h ago`;
+  return new Date(t).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+}
+function syncMark() {
+  const i = syncInfo();
+  if (!i) return '<span class="back-spacer"></span>';
+  return `<a class="back sync-mark ${i.cls}" href="#/settings" data-sync-mark aria-label="${attr(i.label)}" title="${attr(i.label)}">${icon('cloud', 22)}<i></i></a>`;
+}
+function paintSync() {
+  const i = syncInfo();
+  document.querySelectorAll('[data-sync-mark]').forEach((a) => {
+    if (!i) return;
+    a.className = `back sync-mark ${i.cls}`;
+    a.setAttribute('aria-label', i.label); a.title = i.label;
+  });
+  const line = document.querySelector('[data-sync-line]');
+  if (line && i) line.textContent = i.label;
 }
 
 // ---------------------------------------------------------------- views
@@ -1024,6 +1060,7 @@ async function viewSettings() {
   const method = getMethod(settings.method);
   const persisted = navigator.storage && navigator.storage.persisted ? await navigator.storage.persisted().catch(() => false) : false;
   return shell(`
+    ${syncSection()}
     <section class="set-sec">
       <h2>Tasting method</h2>
       ${METHODS.map((m) => `
@@ -1071,9 +1108,11 @@ async function viewSettings() {
     </section>
     <section class="set-sec">
       <h2>Data</h2>
-      <p class="muted small">Everything is stored on this device only${persisted ? ' (protected from automatic clean-up)' : ''}. iPhone and iPad keep separate data for now; export here and import on the other device to move it. Backups hold events, wines, cellar and merchants, but not photos or your API key.</p>
+      <p class="muted small">${sync.state().signedIn
+        ? `Everything is kept on this device${persisted ? ' (protected from automatic clean-up)' : ''} and in your account, so it works offline and shows up on your other devices.`
+        : `Everything is stored on this device only${persisted ? ' (protected from automatic clean-up)' : ''}.${sync.configured() ? ' Sign in above to share it with your other devices.' : ''}`} Backups hold events, wines, cellar and merchants, but not photos or your API key.</p>
       <div class="row2"><button class="btn" data-act="export">Export backup</button><label class="btn">Import backup<input type="file" accept="application/json,.json" hidden data-import></label></div>
-      <button class="btn danger" data-act="wipe">Delete all data</button>
+      <button class="btn danger" data-act="wipe">${sync.state().signedIn ? 'Delete all data on all devices' : 'Delete all data'}</button>
     </section>
     <section class="set-sec about">
       <h2>About</h2>
@@ -1081,6 +1120,31 @@ async function viewSettings() {
       <p class="muted tiny">The WSET Systematic Approach to Tasting Wine® and Wine-Lexicons are copyright Wine & Spirit Education Trust and are used here for personal study. Publishing this app requires WSET's written permission.</p>
     </section>
   `, { title: 'Settings', tab: 'settings' });
+}
+
+function syncSection() {
+  if (!sync.configured()) return '';
+  const x = sync.state();
+  if (!x.signedIn) return `
+    <section class="set-sec sync-sec" id="sync">
+      <h2>Your devices</h2>
+      <p class="muted small">Sign in on each iPhone, iPad and computer with the same email and password. Events, wines, cellar, merchants, photos and settings then stay the same everywhere. It keeps working without signal and catches up when you are back online. What is already on this device is added to your account, nothing is lost. Your API key stays on each device.</p>
+      ${x.message ? `<p class="small sync-warn">${esc(x.message)}</p>` : ''}
+      <label class="block-label">Email<input id="syncEmail" type="email" autocomplete="username" autocapitalize="off" spellcheck="false" inputmode="email"></label>
+      <label class="block-label">Password<input id="syncPass" type="password" autocomplete="current-password" minlength="6"></label>
+      <div class="row2"><button class="btn primary" data-act="signIn">Sign in</button><button class="btn" data-act="signUp">Create account</button></div>
+    </section>`;
+  const i = syncInfo(x);
+  return `
+    <section class="set-sec sync-sec" id="sync">
+      <h2>Your devices</h2>
+      <div class="sync-card">
+        <span class="sync-mark ${i.cls}">${icon('cloud', 22)}<i></i></span>
+        <span><b>${esc(x.email)}</b><br><span class="muted small" data-sync-line>${esc(i.label)}</span></span>
+      </div>
+      <div class="row2"><button class="btn" data-act="syncNow">${icon('sync', 18)} Sync now</button><button class="btn" data-act="signOut">Sign out</button></div>
+      <p class="muted small">Signed in on this device. Sign in with the same account on your other devices to see the same events, wines, cellar and photos.</p>
+    </section>`;
 }
 
 // ---------------------------------------------------------------- router
@@ -1427,10 +1491,58 @@ const actions = {
   },
   async testKey() { try { await testKey(apiKey); toast('The key works ✓'); } catch (e) { toast(e.message); } },
   async wipe() {
+    if (sync.state().signedIn) {
+      if (!(await ask('Delete all events, wines, cellar, merchants and photos on this device AND on all your other devices? This cannot be undone.', 'Delete everywhere'))) return;
+      for (const n of ['events', 'wines', 'media', 'bottles', 'merchants']) for (const id of await db.keys(n)) await db.del(n, id);
+      settings = { ...DEFAULT_SETTINGS, customLexicon: [] }; await saveSettings();
+      sync.syncNow(); go('#/'); rerender(); return;
+    }
     if (!(await ask('Delete all events, wines, cellar, merchants, photos and settings on this device?', 'Delete all'))) return;
     await db.clearAll(); settings = { ...DEFAULT_SETTINGS, customLexicon: [] }; apiKey = ''; go('#/'); rerender();
   },
+  async signIn() { await account('in'); },
+  async signUp() { await account('up'); },
+  async signOut() {
+    if (!(await ask('Sign out on this device? Your data stays here and in your account, but this device stops syncing.', 'Sign out'))) return;
+    await sync.signOut(); rerender();
+  },
+  async syncNow() { await sync.syncNow(); const x = sync.state(); toast(x.status === 'idle' ? 'Up to date' : (syncInfo(x) || {}).label || 'Sync'); },
 };
+
+async function account(kind) {
+  const email = (document.getElementById('syncEmail').value || '').trim();
+  const pass = document.getElementById('syncPass').value || '';
+  if (!email || pass.length < 6) { toast('Enter your email and a password of at least 6 characters.'); return; }
+  toast(kind === 'up' ? 'Creating your account…' : 'Signing in…');
+  try {
+    if (kind === 'up') {
+      const r = await sync.signUp(email, pass);
+      if (r === 'confirm') { toast('Check your email and tap the link, then sign in here.'); return; }
+    } else await sync.signIn(email, pass);
+    toast('Signed in. Your devices now share data.');
+  } catch (e) {
+    toast(/invalid login/i.test(e.message) ? 'Wrong email or password.' : /fetch|network/i.test(e.message) ? 'No connection. Try again when online.' : e.message);
+  }
+  await reloadSettings();
+  rerender();
+}
+
+async function reloadSettings() {
+  settings = { ...DEFAULT_SETTINGS, ...(await db.getKV('settings', {})) };
+  settings.customLexicon = settings.customLexicon || [];
+}
+
+// Another device changed something: refresh the screen, unless the user is typing or filling in a form.
+let remoteRedraw = false;
+async function onRemoteChange(changed) {
+  if (changed.has('settings')) await reloadSettings();
+  const typing = document.activeElement && /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName);
+  const inForm = /\/(new|edit|add)(\/|$)/.test(location.hash) || /^#\/wine\//.test(location.hash) && pendingWine;
+  if (typing || inForm || document.querySelector('.modal')) { remoteRedraw = true; return; }
+  rerender();
+}
+document.addEventListener('focusout', () => { if (remoteRedraw) setTimeout(() => { if (remoteRedraw && !(document.activeElement && /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName))) { remoteRedraw = false; rerender(); } }, 400); });
+window.addEventListener('hashchange', () => { remoteRedraw = false; });
 
 const changeActions = {
   async method(el) { settings.method = el.value; settings.level = getMethod(el.value).defaultLevel; await saveSettings(); rerender(); },
@@ -1658,6 +1770,8 @@ async function boot() {
   if ('structurePlus' in settings) { delete settings.structurePlus; await saveSettings(); } // replaced by 'advanced' (off by default)
   apiKey = (await db.getKV('apiKey', '')) || '';
   window.addEventListener('hashchange', route);
+  sync.subscribe(paintSync);
+  await sync.init(onRemoteChange);
   await route();
   requestPersistence();
   if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {

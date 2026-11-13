@@ -1,8 +1,13 @@
-// Tiny IndexedDB wrapper. Everything is stored on the device, offline.
-// Stores: events, wines, media (photo/video blobs), kv (settings), bottles (cellar), merchants.
+// Tiny IndexedDB wrapper. Everything is stored on the device first, so the app works offline.
+// Stores: events, wines, media (photo/video blobs), kv (settings), bottles (cellar), merchants,
+// outbox (changes not yet sent to the sync server, see sync.js).
 
 const DB_NAME = 'tasting-app';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
+// Stores that sync across devices. 'settings' (in kv) syncs too, handled in sync.js.
+export const SYNCED = ['events', 'wines', 'media', 'bottles', 'merchants'];
+let changeHook = () => {};
+export function onLocalChange(fn) { changeHook = fn; }
 let dbp;
 
 function open() {
@@ -23,6 +28,7 @@ function open() {
       if (!db.objectStoreNames.contains('kv')) db.createObjectStore('kv');
       if (!db.objectStoreNames.contains('bottles')) db.createObjectStore('bottles', { keyPath: 'id' });
       if (!db.objectStoreNames.contains('merchants')) db.createObjectStore('merchants', { keyPath: 'id' });
+      if (!db.objectStoreNames.contains('outbox')) db.createObjectStore('outbox', { keyPath: 'key' });
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
@@ -47,14 +53,45 @@ export const uid = () => Date.now().toString(36) + Math.random().toString(36).sl
 export const db = {
   async get(name, id) { return wrap((await store(name)).get(id)); },
   async all(name) { return wrap((await store(name)).getAll()); },
-  async put(name, obj) { obj.updatedAt = Date.now(); await wrap((await store(name, 'readwrite')).put(obj)); return obj; },
-  async del(name, id) { return wrap((await store(name, 'readwrite')).delete(id)); },
+  async put(name, obj) {
+    obj.updatedAt = Date.now();
+    await wrap((await store(name, 'readwrite')).put(obj));
+    if (SYNCED.includes(name)) await markDirty(name, obj.id, false, obj.updatedAt);
+    return obj;
+  },
+  async del(name, id) {
+    await wrap((await store(name, 'readwrite')).delete(id));
+    if (SYNCED.includes(name)) await markDirty(name, id, true, Date.now());
+  },
+  // Writes coming from the sync server: keep their timestamp, do not send them back.
+  async putRemote(name, obj) { return wrap((await store(name, 'readwrite')).put(obj)); },
+  async delRemote(name, id) { return wrap((await store(name, 'readwrite')).delete(id)); },
   async byIndex(name, index, value) { return wrap((await store(name)).index(index).getAll(value)); },
   async getKV(key, fallback) { const v = await wrap((await store('kv')).get(key)); return v === undefined ? fallback : v; },
-  async setKV(key, value) { return wrap((await store('kv', 'readwrite')).put(value, key)); },
-  async clearAll() {
-    for (const n of ['events', 'wines', 'media', 'kv', 'bottles', 'merchants']) await wrap((await store(n, 'readwrite')).clear());
+  async setKV(key, value) {
+    if (key === 'settings' && value && typeof value === 'object') value.updatedAt = Date.now();
+    await wrap((await store('kv', 'readwrite')).put(value, key));
+    if (key === 'settings') await markDirty('kv', 'settings', false, value.updatedAt);
   },
+  async setKVRemote(key, value) { return wrap((await store('kv', 'readwrite')).put(value, key)); },
+  async keys(name) { return wrap((await store(name)).getAllKeys()); },
+  // Wipes this device. Sync keys (session, cursor) live in kv and are wiped too.
+  async clearAll() {
+    for (const n of ['events', 'wines', 'media', 'kv', 'bottles', 'merchants', 'outbox']) await wrap((await store(n, 'readwrite')).clear());
+  },
+};
+
+// The outbox holds one row per changed record ('store/id'); a later change replaces it.
+async function markDirty(name, id, deleted, at) {
+  await wrap((await store('outbox', 'readwrite')).put({ key: name + '/' + id, store: name, id, deleted, at }));
+  changeHook();
+}
+export const outbox = {
+  async all() { return wrap((await store('outbox')).getAll()); },
+  async get(key) { return wrap((await store('outbox')).get(key)); },
+  async remove(key) { return wrap((await store('outbox', 'readwrite')).delete(key)); },
+  async add(name, id, deleted = false, at = Date.now()) { return markDirty(name, id, deleted, at); },
+  async count() { return wrap((await store('outbox')).count()); },
 };
 
 // Ask the browser not to evict our data (helps on iOS when installed to Home Screen).

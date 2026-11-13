@@ -716,3 +716,18 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
 .unscored .st-score { font-family: var(--f-italic); font-style: italic; font-size: 0.9375rem; color: var(--muted); }
 .ec-meta { flex: none; white-space: nowrap; }
 .ec-main { min-width: 0; }
+
+/* ---------- sync: a small cloud with a status dot (top-left on main screens, and in Settings) */
+.sync-mark { position: relative; color: var(--muted); }
+.sync-mark i { position: absolute; right: 9px; bottom: 10px; width: 8px; height: 8px; border-radius: 50%; border: 1.5px solid var(--card); background: var(--edge); }
+.sync-mark.ok i { background: var(--ok); }
+.sync-mark.wait i { background: var(--mustard); }
+.sync-mark.err i { background: var(--danger); }
+.sync-mark.out i { background: transparent; border-color: var(--edge); }
+.sync-mark.busy .ic { animation: sync-breathe 1.4s ease-in-out infinite; }
+@keyframes sync-breathe { 50% { opacity: .45; } }
+@media (prefers-reduced-motion: reduce) { .sync-mark.busy .ic { animation: none; } }
+.sync-card { display: flex; align-items: center; gap: 12px; padding: 12px 14px; margin-bottom: 12px; background: var(--card); border: 1px solid var(--line); border-radius: var(--r-md); box-shadow: var(--shadow); }
+.sync-card .sync-mark { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; flex: none; border-radius: 50%; background: var(--sunk); }
+.sync-sec .btn .ic { vertical-align: -3px; }
+.sync-warn { color: var(--danger); }
