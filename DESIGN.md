@@ -320,7 +320,7 @@ The screen title in a sunk pill at the top centre ("Atmospheric Data" in the ref
 ### Signature: Tasting instruments
 The SAT scales (sweetness, acidity, tannin, alcohol, body, flavour intensity, finish) are drawn as engraved scales: a rule with one tick per SAT step, the step names in spaced caps under it, and a cream knob that snaps to a step. The chosen step fills copper from the left. Nothing is pre-selected, so the knob starts parked off-scale and muted.
 
-The **quality** conclusion and the **score** use the hero dial: a copper-ringed circle, a big Numeral in the middle, a spaced-caps unit under it, and the italic Descriptor below the dial ("Very good").
+The **score** uses the hero dial: a copper-ringed gauge, a big Numeral in the middle, a spaced-caps unit under it, and the chosen **quality** level as the italic Descriptor below the dial ("Very good"). Choices that are not an ordered scale (quality level with its six named steps, condition, development, readiness, BLIC) stay as pills.
 
 ### Signature: Engraved illustration
 Empty states, the label-scan screen and event covers use single-colour engraved line art (grapes, a glass, a bottle, a vine leaf, a cellar arch, a corkscrew) in ink or copper on paper, with a faint paper texture. These must be original drawings or properly licensed public-domain engravings.

@@ -1,10 +1,12 @@
 // Offline cache for the app shell. Bump VERSION when files change.
-const VERSION = 'tasting-v6';
+const VERSION = 'tasting-v7';
 const FILES = [
   './', 'index.html', 'manifest.webmanifest', 'css/app.css',
   'js/app.js', 'js/db.js', 'js/note.js', 'js/guess.js', 'js/profiles.js',
-  'js/scan.js', 'js/methods/index.js', 'js/methods/wset.js',
+  'js/scan.js', 'js/icons.js', 'js/methods/index.js', 'js/methods/wset.js',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png',
+  'fonts/libre-caslon-display-latin-400-normal.woff2', 'fonts/libre-caslon-text-latin-400-italic.woff2',
+  'fonts/josefin-sans-latin-600-normal.woff2', 'fonts/courier-prime-latin-400-normal.woff2',
 ];
 
 self.addEventListener('install', (e) => {
