@@ -1,9 +1,9 @@
 // Offline cache for the app shell. Bump VERSION when files change.
-const VERSION = 'tasting-v3';
+const VERSION = 'tasting-v4';
 const FILES = [
   './', 'index.html', 'manifest.webmanifest', 'css/app.css',
   'js/app.js', 'js/db.js', 'js/note.js', 'js/guess.js', 'js/profiles.js',
-  'js/methods/index.js', 'js/methods/wset.js',
+  'js/scan.js', 'js/methods/index.js', 'js/methods/wset.js',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png',
 ];
 

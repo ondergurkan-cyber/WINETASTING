@@ -2,6 +2,7 @@ import { db, uid, addMedia, requestPersistence } from './db.js';
 import { METHODS, getMethod, getLevel, fieldsFor } from './methods/index.js';
 import { generateNote, wineTitle, formatScore } from './note.js';
 import { guess, explain } from './guess.js';
+import { scanLabel, testKey } from './scan.js';
 
 // ---------------------------------------------------------------- helpers
 const $app = document.getElementById('app');
@@ -19,10 +20,14 @@ const DEFAULT_BANDS = {
   poor: [[70, 79], [12, 14.5]],
   faulty: [[50, 69], [0, 11.5]],
 };
-const DEFAULT_SETTINGS = { method: 'wset', level: 'l3', structurePlus: true, scale: 100, noteFormat: 'full', mode: 'full', customLexicon: [] };
+const DEFAULT_SETTINGS = { method: 'wset', level: 'l3', structurePlus: true, scale: 100, noteFormat: 'full', mode: 'full', customLexicon: [], autoScan: true, currency: '€' };
 
 let settings = { ...DEFAULT_SETTINGS };
-const ui = { open: {}, unfold: {}, eventTab: {}, standingsFilter: 'all' };
+let apiKey = ''; // the user's own Anthropic key; device only, never exported
+const ui = { open: {}, unfold: {}, eventTab: {}, standingsFilter: 'all', cellarFilter: 'in', aiFilled: {} };
+const money = (n) => (n == null || n === '' || isNaN(n) ? '' : `${settings.currency || ''}${(+n).toLocaleString(undefined, { maximumFractionDigits: 2 })}`);
+const num = (v) => { const x = parseFloat(String(v ?? '').replace(',', '.').replace(/[^0-9.]/g, '')); return isNaN(x) ? null : x; };
+const thisYear = () => new Date().getFullYear();
 const urlCache = new Map();
 function mediaURL(m) {
   if (!urlCache.has(m.id)) urlCache.set(m.id, URL.createObjectURL(m.blob));
@@ -30,6 +35,7 @@ function mediaURL(m) {
 }
 
 function toast(msg) {
+  document.querySelectorAll('.toast').forEach((x) => x.remove());
   const t = document.createElement('div');
   t.className = 'toast';
   t.textContent = msg;
@@ -91,7 +97,9 @@ function bandFor(quality, scale) {
 function shell(content, { title, back, tab, actions = '' } = {}) {
   const tabs = tab ? `
     <nav class="tabbar">
-      <a href="#/" class="${tab === 'events' ? 'on' : ''}"><span class="ti">🍷</span>Events</a>
+      <a href="#/" class="${tab === 'tasting' ? 'on' : ''}"><span class="ti">🍷</span>Tasting</a>
+      <a href="#/cellar" class="${tab === 'cellar' ? 'on' : ''}"><span class="ti">🍾</span>Cellar</a>
+      <a href="#/merchants" class="${tab === 'merchants' ? 'on' : ''}"><span class="ti">🏪</span>Merchants</a>
       <a href="#/standings" class="${tab === 'standings' ? 'on' : ''}"><span class="ti">🏆</span>Standings</a>
       <a href="#/settings" class="${tab === 'settings' ? 'on' : ''}"><span class="ti">⚙︎</span>Settings</a>
     </nav>` : '';
@@ -133,10 +141,56 @@ async function viewEvents() {
       <p class="muted">Create an event, add the wines, and taste them with the ${esc(getMethod(settings.method).name)} ${esc(level.name)}.</p>
     </div>`;
   return shell(`
+    ${homeTabs('events')}
     <div class="method-badge">Method: <b>${esc(getMethod(settings.method).name)}</b> · ${esc(level.name)}${settings.structurePlus ? ' · Structure+' : ''} <a href="#/settings">change</a></div>
     ${events.length ? cards : empty}
-    <a class="fab" href="#/event/new">+ New event</a>
-  `, { title: 'Events', tab: 'events' });
+    <a class="fab" href="#/new">+ New tasting</a>
+  `, { title: 'Tasting', tab: 'tasting' });
+}
+
+function homeTabs(on) {
+  return `<div class="seg seg-tabs">
+      <a href="#/" class="${on === 'events' ? 'on' : ''}">Events</a>
+      <a href="#/mywines" class="${on === 'mywines' ? 'on' : ''}">My Wines</a>
+    </div>`;
+}
+
+// ---------- new tasting: event or single wine
+function viewNewTasting() {
+  return shell(`
+    <p class="muted">What are you tasting?</p>
+    <a class="card choice" href="#/event/new"><span class="choice-icon">🥂</span><span><b>Event</b><br><span class="muted small">A tasting with several wines: name, date, place, standings, optional blind mode.</span></span></a>
+    <a class="card choice" href="#/single/new"><span class="choice-icon">🍷</span><span><b>Single wine</b><br><span class="muted small">A glass at a restaurant, a dinner, a bottle at home. Saved in My Wines with its date and place.</span></span></a>
+    <a class="card choice" href="#/cellar"><span class="choice-icon">🍾</span><span><b>Open a bottle from my cellar</b><br><span class="muted small">Pick a bottle; it is taken out of the cellar and the tasting starts.</span></span></a>
+  `, { title: 'New tasting', back: '#/' });
+}
+
+// ---------- My Wines: single tastings, grouped by month
+async function viewMyWines() {
+  const wines = (await db.all('wines')).filter((w) => !w.eventId && w.saved)
+    .sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.createdAt || 0) - (a.createdAt || 0));
+  const groups = new Map();
+  for (const w of wines) {
+    let k = 'No date';
+    try { if (w.date) k = new Date(w.date + 'T12:00:00').toLocaleDateString(undefined, { month: 'long', year: 'numeric' }); } catch (e) { /* keep */ }
+    if (!groups.has(k)) groups.set(k, []);
+    groups.get(k).push(w);
+  }
+  const body = [...groups].map(([k, ws]) => `
+    <div class="group-head">${esc(k)} <span class="muted small">· ${ws.length}</span></div>
+    ${ws.map((w) => {
+      const t = w.tasting;
+      return `<a class="card wine-card wc-link" href="#/wine/${w.id}">
+          ${w.labelId ? `<img class="thumb" data-media="${w.labelId}" alt="">` : '<div class="thumb ph">🍷</div>'}
+          <span class="wc-main">
+            <span class="wc-name">${esc(wineTitle(w))}</span>
+            <span class="muted small"><span class="dot dot-${w.colour || 'none'}"></span>${esc([w.place, fmtDate(w.date)].filter(Boolean).join(' · '))}${t && t.done ? '' : ' · tasting'}</span>
+          </span>
+          <span class="wc-score">${t && t.score != null && t.score !== '' ? esc(formatScore(t.score, w.scale || 100)) : ''}</span>
+        </a>`;
+    }).join('')}`).join('');
+  const empty = `<div class="empty"><div class="empty-icon">🍷</div><p><b>No single wines yet.</b></p><p class="muted">Tasting a glass at a restaurant or a bottle at home? Tap <b>+ New tasting</b> and pick <b>Single wine</b>. Its place works as a reminder of where you had it.</p></div>`;
+  return shell(`${homeTabs('mywines')}${wines.length ? body : empty}<a class="fab" href="#/single/new">+ Single wine</a>`, { title: 'Tasting', tab: 'tasting' });
 }
 
 async function viewEventForm(id) {
@@ -160,6 +214,17 @@ async function viewEventForm(id) {
     </form>
   `, { title: id ? 'Edit event' : 'New event', back: id ? `#/event/${id}` : '#/' });
 }
+
+// The event a wine belongs to; single wines get a stand-in "My Wines" event.
+async function wineCtx(w) {
+  if (w.eventId) {
+    const { event, wines } = await loadEvent(w.eventId);
+    if (event) return { event, wines, idx: wines.findIndex((x) => x.id === w.id) };
+  }
+  return { event: { id: null, name: 'My Wines', scale: w.scale === 20 ? 20 : 100, blind: false, single: true }, wines: [w], idx: 0 };
+}
+const backFor = (w) => (w.eventId ? `#/event/${w.eventId}` : '#/mywines');
+const editFor = (w) => (w.eventId ? `#/event/${w.eventId}/wine/${w.id}/edit` : `#/single/${w.id}/edit`);
 
 async function loadEvent(id) {
   const event = await db.get('events', id);
@@ -252,18 +317,37 @@ async function viewEvent(id) {
   `, { title: event.name, back: '#/', actions: `<a class="icon-btn" href="#/event/${id}/edit" aria-label="Edit event">✎</a>` });
 }
 
-function wineDetailFields(w) {
+function wineDetailFields(w, { price = true } = {}) {
+  const ai = ui.aiFilled[w.id] || { fields: [], uncertain: [] };
+  const cls = (k) => (ai.uncertain.includes(k) ? ' class="ai-check"' : ai.fields.includes(k) ? ' class="ai-ok"' : '');
+  const tag = (k) => (ai.uncertain.includes(k) ? ' <span class="ai-tag warn">check</span>' : ai.fields.includes(k) ? ' <span class="ai-tag">AI</span>' : '');
   return `
-    <label>Producer<input name="producer" value="${attr(w.producer)}" placeholder="Domaine Leflaive"></label>
-    <label>Wine / cuvée<input name="name" value="${attr(w.name)}" placeholder="Puligny-Montrachet 1er Cru"></label>
+    <label${cls('producer')}>Producer${tag('producer')}<input name="producer" value="${attr(w.producer)}" placeholder="Domaine Leflaive"></label>
+    <label${cls('name')}>Wine / cuvée${tag('name')}<input name="name" value="${attr(w.name)}" placeholder="Puligny-Montrachet 1er Cru"></label>
     <div class="row2">
-      <label>Vintage<input name="vintage" inputmode="numeric" value="${attr(w.vintage)}" placeholder="2019"></label>
-      <label>ABV %<input name="abv" inputmode="decimal" value="${attr(w.abv)}" placeholder="13"></label>
+      <label${cls('vintage')}>Vintage${tag('vintage')}<input name="vintage" inputmode="numeric" value="${attr(w.vintage)}" placeholder="2019"></label>
+      <label${cls('abv')}>ABV %${tag('abv')}<input name="abv" inputmode="decimal" value="${attr(w.abv)}" placeholder="13"></label>
     </div>
-    <label>Region / appellation<input name="region" value="${attr(w.region)}" placeholder="Burgundy"></label>
-    <label>Country<input name="country" value="${attr(w.country)}" placeholder="France"></label>
-    <label>Grape(s)<input name="grapes" value="${attr(w.grapes)}" placeholder="Chardonnay"></label>
-    <label>Price / notes<input name="price" value="${attr(w.price)}"></label>`;
+    <label${cls('region')}>Region / appellation${tag('region')}<input name="region" value="${attr(w.region)}" placeholder="Burgundy"></label>
+    <label${cls('country')}>Country${tag('country')}<input name="country" value="${attr(w.country)}" placeholder="France"></label>
+    <label${cls('grapes')}>Grape(s)${tag('grapes')}<input name="grapes" value="${attr(w.grapes)}" placeholder="Chardonnay"></label>
+    ${price ? `<label>Price / notes<input name="price" value="${attr(w.price)}"></label>` : ''}`;
+}
+
+// Label photo with camera button and the AI scan button/status.
+function labelBlock(obj, label, kind, hide) {
+  const st = ui.scanState && ui.scanState.id === obj.id ? ui.scanState : null;
+  let scan = '';
+  if (label) {
+    if (st && st.busy) scan = '<p class="scan-status"><span class="spin"></span> Reading the label…</p>';
+    else if (!apiKey) scan = `<p class="muted small">AI label reading is off. <a href="#/settings">Add your API key in Settings</a> to fill these details from the photo.</p>`;
+    else scan = `<button class="btn" type="button" data-act="scanLabel" data-kind="${kind}">✨ ${st && st.done ? 'Read the label again' : 'Read label with AI'}</button>${st && st.error ? `<p class="note-box">${esc(st.error)}</p>` : ''}${st && st.done ? `<p class="muted small">${hide ? 'Label read. Details stay hidden until you reveal the wine.' : 'Filled from the label. Fields marked <b>check</b> are uncertain, so look them over.'}</p>` : ''}`;
+  }
+  return `<div class="label-shot">
+      ${label ? `<img src="${mediaURL(label)}" alt="Label" class="${hide ? 'blurred' : ''}">` : '<div class="label-ph">📷<br>Label photo</div>'}
+      <label class="btn">${label ? 'Retake' : 'Take label photo'}<input type="file" accept="image/*" capture="environment" hidden data-upload="${kind === 'bottle' ? 'blabel' : 'label'}"></label>
+      ${scan}
+    </div>`;
 }
 
 
@@ -278,17 +362,49 @@ async function viewAddWine(eventId, wineId) {
   const label = w.labelId ? await db.get('media', w.labelId) : null;
   return shell(`
     <form class="form" id="wineForm">
-      <div class="label-shot">
-        ${label ? `<img src="${mediaURL(label)}" alt="Label" class="${hide ? 'blurred' : ''}">` : '<div class="label-ph">📷<br>Label photo</div>'}
-        <label class="btn">${label ? 'Retake' : 'Take label photo'}<input type="file" accept="image/*" capture="environment" hidden data-upload="label"></label>
-      </div>
+      ${labelBlock(w, label, 'wine', hide)}
       ${hide ? `<p class="note-box">Blind event: the label photo is stored but blurred, and details stay hidden until you tap <b>Reveal</b> after guessing. You can leave the details empty and fill them in at the reveal.</p>`
-        : `<p class="muted small">AI label reading is planned; for now type the details from the label.</p>${wineDetailFields(w)}`}
+        : wineDetailFields(w)}
       <div class="field-label">Style</div>${styleTiles(w)}
       <button class="btn primary" type="submit">${editing ? 'Save' : 'Add wine'}</button>
       ${editing ? '<button class="btn danger" type="button" data-act="deleteWine">Delete wine</button>' : ''}
     </form>
   `, { title: editing ? 'Wine details' : 'Add wine', back: editing ? `#/wine/${wineId}` : `#/event/${eventId}` });
+}
+
+// ---------- single wine (My Wines): details, date, place, scale
+async function viewSingleForm(wineId) {
+  const editing = !!wineId;
+  if (editing) draftWine = await db.get('wines', wineId);
+  else if (!draftWine || draftWine.eventId || draftWine.saved) draftWine = { id: uid(), eventId: null, single: true, colour: '', type: 'still', date: today(), place: '', scale: settings.scale };
+  const w = draftWine;
+  const label = w.labelId ? await db.get('media', w.labelId) : null;
+  const sc = w.scale === 20 ? 20 : 100;
+  return shell(`
+    <form class="form" id="singleForm">
+      ${labelBlock(w, label, 'wine', false)}
+      ${wineDetailFields(w)}
+      <div class="field-label">Style</div>${styleTiles(w)}
+      <div class="row2">
+        <label>Date<input name="date" type="date" value="${attr(w.date || today())}"></label>
+        <div><div class="field-label">Score out of</div>
+          <div class="seg">${[100, 20].map((v) => `<label><input type="radio" name="scale" value="${v}" ${sc === v ? 'checked' : ''}><span>${v}</span></label>`).join('')}</div></div>
+      </div>
+      <label>Where<input name="place" value="${attr(w.place)}" placeholder="Restaurant, city, a friend's home…"></label>
+      <div class="loc-row">
+        <button class="btn" type="button" data-act="useLocation">📍 ${w.lat ? 'Update my location' : 'Save my location'}</button>
+        ${w.lat ? `<a class="btn" href="${mapURL(w)}" target="_blank" rel="noopener">Open map</a>` : ''}
+      </div>
+      ${w.lat ? '<p class="muted small">Location saved, so you can find the place again.</p>' : ''}
+      <button class="btn primary" type="submit">${editing ? 'Save' : 'Start tasting'}</button>
+      ${editing ? '<button class="btn danger" type="button" data-act="deleteWine">Delete wine</button>' : ''}
+    </form>
+  `, { title: editing ? 'Wine details' : 'Single wine', back: editing ? `#/wine/${wineId}` : '#/mywines' });
+}
+
+function mapURL(o) {
+  const q = encodeURIComponent(o.place || o.address || 'Wine');
+  return o.lat ? `https://maps.apple.com/?ll=${o.lat},${o.lng}&q=${q}` : `https://maps.apple.com/?q=${q}`;
 }
 
 // ---------- tasting sheet (one page: Look, Smell, Taste, Verdict)
@@ -568,8 +684,7 @@ function verdictBody(fields, t, w, level, event) {
 async function viewWine(id) {
   const w = await db.get('wines', id);
   if (!w) return shell('<p class="muted center">Wine not found.</p>', { title: 'Wine', back: '#/' });
-  const { event, wines } = await loadEvent(w.eventId);
-  const idx = wines.findIndex((x) => x.id === id);
+  const { event, wines, idx } = await wineCtx(w);
   const t = ensureTasting(w);
   const level = getLevel(t.methodId, t.levelId);
   const method = getMethod(t.methodId);
@@ -583,11 +698,13 @@ async function viewWine(id) {
   const sections = SECTIONS.map((s) => renderSection(s, level, w, t, event, idx, wines)).join('');
   const extras = await wrapExtras(w, t, level, event, idx, wines);
   const sub = `${method.name} · ${level.name} · ${styleLabel(w)}${event.blind && !w.revealed ? ' · blind' : ''}`;
+  const where = event.single
+    ? `<div class="wine-sub small">${[w.place ? (w.lat ? `<a href="${mapURL(w)}" target="_blank" rel="noopener">📍 ${esc(w.place)}</a>` : `📍 ${esc(w.place)}`) : (w.lat ? `<a href="${mapURL(w)}" target="_blank" rel="noopener">📍 map</a>` : ''), esc(fmtDate(w.date)), w.bottleId ? `<a href="#/bottle/${w.bottleId}">from my cellar</a>` : ''].filter(Boolean).join(' · ')}</div>` : '';
   const modeToggle = `<div class="mode-toggle" role="group" aria-label="Mode">
       <button class="${t.mode === 'quick' ? 'on' : ''}" data-act="mode" data-v="quick">Quick</button>
       <button class="${t.mode !== 'quick' ? 'on' : ''}" data-act="mode" data-v="full">Full SAT</button></div>`;
-  return shell(`<div class="sheet-head"><div class="wine-sub muted small">${esc(sub)} · wine ${idx + 1} of ${wines.length}</div>${modeToggle}</div>${strip}<div class="sheet">${sections}${extras}</div>`,
-    { title: displayName(w, event, idx), back: `#/event/${w.eventId}`, actions: (!event.blind || w.revealed) ? `<a class="icon-btn" href="#/event/${w.eventId}/wine/${w.id}/edit" aria-label="Wine details">✎</a>` : '' });
+  return shell(`<div class="sheet-head"><div class="wine-sub muted small">${esc(sub)}${event.single ? '' : ` · wine ${idx + 1} of ${wines.length}`}</div>${modeToggle}</div>${where}${strip}<div class="sheet">${sections}${extras}</div>`,
+    { title: displayName(w, event, idx), back: backFor(w), actions: (!event.blind || w.revealed) ? `<a class="icon-btn" href="${editFor(w)}" aria-label="Wine details">✎</a>` : '' });
 }
 
 // Guess, note, photos, reveal and the save buttons, below the Verdict.
@@ -664,17 +781,217 @@ async function viewStandings() {
       rows.push({ wine: w, name: displayName(w, e, i), sub: e.name });
     });
   }
+  for (const w of wines.filter((x) => !x.eventId && x.saved)) {
+    if (f !== 'all' && f !== 'my' && (f.startsWith('c:') ? w.colour !== f.slice(2) : true)) continue;
+    rows.push({ wine: w, name: wineTitle(w), sub: ['My Wines', w.place].filter(Boolean).join(' · ') });
+  }
+  if (f === 'my') rows.splice(0, rows.length, ...rows.filter((r) => !r.wine.eventId));
   return shell(`
     <div class="filter-row">
       <select data-act-change="standingsFilter">
         <option value="all">All wines</option>
+        <option value="my" ${f === 'my' ? 'selected' : ''}>My Wines (single tastings)</option>
         <optgroup label="Colour">${['white', 'rose', 'red'].map((c) => `<option value="c:${c}" ${f === 'c:' + c ? 'selected' : ''}>${COLOUR_LABEL[c]}</option>`).join('')}</optgroup>
         <optgroup label="Event">${events.map((e) => `<option value="e:${e.id}" ${f === 'e:' + e.id ? 'selected' : ''}>${esc(e.name)}</option>`).join('')}</optgroup>
       </select>
     </div>
     <p class="muted small">20-point scores are compared as ×5.</p>
-    ${standingsList(rows, (r) => (evById[r.wine.eventId] || {}).scale)}
+    ${standingsList(rows, (r) => (r.wine.eventId ? (evById[r.wine.eventId] || {}).scale : (r.wine.scale === 20 ? 20 : 100)))}
   `, { title: 'Standings', tab: 'standings' });
+}
+
+// ---------- cellar
+function windowStatus(b) {
+  const y = thisYear();
+  if (b.drinkTo && b.drinkTo < y) return { k: 'past', label: `past its window (${b.drinkTo})` };
+  if (b.drinkTo && b.drinkTo <= y + 1) return { k: 'soon', label: `drink by ${b.drinkTo}` };
+  if (b.drinkFrom && b.drinkFrom > y) return { k: 'wait', label: `from ${b.drinkFrom}` };
+  if (b.drinkFrom || b.drinkTo) return { k: 'ready', label: `ready${b.drinkTo ? ` to ${b.drinkTo}` : ''}` };
+  return { k: '', label: '' };
+}
+
+async function viewCellar() {
+  const bottles = await db.all('bottles');
+  const f = ui.cellarFilter;
+  const inCellar = bottles.filter((b) => (b.qty || 0) > 0);
+  const soon = inCellar.filter((b) => ['soon', 'past'].includes(windowStatus(b).k));
+  const list = (f === 'soon' ? soon : f === 'gone' ? bottles.filter((b) => !(b.qty > 0)) : inCellar)
+    .sort((a, b) => wineTitle(a).localeCompare(wineTitle(b)));
+  const count = inCellar.reduce((n, b) => n + (b.qty || 0), 0);
+  const value = inCellar.reduce((n, b) => n + (b.qty || 0) * (num(b.price) || 0), 0);
+  const cards = list.map((b) => {
+    const ws = windowStatus(b);
+    return `<a class="card wine-card wc-link" href="#/bottle/${b.id}">
+        ${b.labelId ? `<img class="thumb" data-media="${b.labelId}" alt="">` : '<div class="thumb ph">🍾</div>'}
+        <span class="wc-main">
+          <span class="wc-name">${esc(wineTitle(b))}</span>
+          <span class="muted small"><span class="dot dot-${b.colour || 'none'}"></span>${esc([b.location, ws.label].filter(Boolean).join(' · ') || styleLabel(b))}</span>
+        </span>
+        <span class="qty ${ws.k}">×${b.qty || 0}</span>
+      </a>`;
+  }).join('');
+  const empty = f === 'in' ? `<div class="empty"><div class="empty-icon">🍾</div><p><b>Your cellar is empty.</b></p><p class="muted">Add bottles with a label photo. Track how many you have, where they are, what you paid and when to drink them.</p></div>`
+    : `<p class="muted center">${f === 'soon' ? 'Nothing needs drinking soon.' : 'No finished bottles yet.'}</p>`;
+  return shell(`
+    <div class="stats"><div><b>${count}</b><span>bottles</span></div><div><b>${inCellar.length}</b><span>wines</span></div><div><b>${esc(money(value) || '–')}</b><span>value</span></div></div>
+    <div class="seg seg-tabs">${[['in', 'In cellar'], ['soon', `Drink soon${soon.length ? ` (${soon.length})` : ''}`], ['gone', 'Finished']].map(([k, l]) => `<button data-act="cellarFilter" data-v="${k}" class="${f === k ? 'on' : ''}">${l}</button>`).join('')}</div>
+    ${list.length ? cards : empty}
+    <a class="fab" href="#/cellar/new">+ Add bottles</a>
+  `, { title: 'Cellar', tab: 'cellar' });
+}
+
+let draftBottle = null;
+async function viewBottleForm(id, merchantId) {
+  const editing = !!id;
+  if (editing) draftBottle = await db.get('bottles', id);
+  else if (!draftBottle || draftBottle.saved) draftBottle = { id: uid(), colour: '', type: 'still', qty: 1, purchaseDate: today(), merchantId: merchantId || '' };
+  if (!editing && merchantId) draftBottle.merchantId = merchantId;
+  const b = draftBottle;
+  const label = b.labelId ? await db.get('media', b.labelId) : null;
+  const merchants = (await db.all('merchants')).sort((x, y) => x.name.localeCompare(y.name));
+  const ai = ui.aiFilled[b.id] || { fields: [] };
+  return shell(`
+    <form class="form" id="bottleForm">
+      ${labelBlock(b, label, 'bottle', false)}
+      ${wineDetailFields(b, { price: false })}
+      <div class="field-label">Style</div>${styleTiles(b)}
+      <div class="row2">
+        <label>${editing ? 'Bottles in cellar' : 'Bottles'}<input name="qty" type="number" inputmode="numeric" min="0" value="${attr(b.qty ?? 1)}"></label>
+        <label>Price per bottle${settings.currency ? ` (${esc(settings.currency)})` : ''}<input name="price" inputmode="decimal" value="${attr(b.price)}" placeholder="25"></label>
+      </div>
+      <label>Where in the cellar<input name="location" value="${attr(b.location)}" placeholder="Rack A, shelf 3"></label>
+      <label>Bought from
+        <select name="merchantId"><option value="">—</option>${merchants.map((m) => `<option value="${m.id}" ${b.merchantId === m.id ? 'selected' : ''}>${esc(m.name)}</option>`).join('')}</select></label>
+      <a class="link small" href="#/merchant/new" data-act="newMerchantFromBottle">+ New merchant</a>
+      <label>Purchase date<input name="purchaseDate" type="date" value="${attr(b.purchaseDate)}"></label>
+      <div class="row2">
+        <label>Drink from${ai.fields.includes('drinkFrom') ? ' <span class="ai-tag warn">AI estimate</span>' : ''}<input name="drinkFrom" type="number" inputmode="numeric" value="${attr(b.drinkFrom)}" placeholder="${thisYear()}"></label>
+        <label>Drink by${ai.fields.includes('drinkTo') ? ' <span class="ai-tag warn">AI estimate</span>' : ''}<input name="drinkTo" type="number" inputmode="numeric" value="${attr(b.drinkTo)}" placeholder="${thisYear() + 5}"></label>
+      </div>
+      <label>Notes<textarea name="notes" rows="3" placeholder="Gift from…, bought for…, decant first…">${esc(b.notes || '')}</textarea></label>
+      <button class="btn primary" type="submit">${editing ? 'Save' : 'Add to cellar'}</button>
+      ${editing ? '<button class="btn danger" type="button" data-act="deleteBottle">Delete from cellar</button>' : ''}
+    </form>
+  `, { title: editing ? 'Edit bottle' : 'Add bottles', back: editing ? `#/bottle/${id}` : (merchantId ? `#/merchant/${merchantId}` : '#/cellar') });
+}
+
+function readBottleForm() {
+  const form = $app.querySelector('#bottleForm');
+  if (!form || !draftBottle) return;
+  for (const k of ['producer', 'name', 'vintage', 'abv', 'region', 'country', 'grapes', 'price', 'location', 'merchantId', 'purchaseDate', 'notes']) {
+    if (form.elements[k]) draftBottle[k] = form.elements[k].value.trim();
+  }
+  for (const k of ['qty', 'drinkFrom', 'drinkTo']) {
+    if (form.elements[k]) { const v = parseInt(form.elements[k].value, 10); draftBottle[k] = isNaN(v) ? (k === 'qty' ? 0 : null) : v; }
+  }
+}
+
+async function viewBottle(id) {
+  const b = await db.get('bottles', id);
+  if (!b) return shell('<p class="muted center">Bottle not found.</p>', { title: 'Cellar', back: '#/cellar' });
+  const m = b.merchantId ? await db.get('merchants', b.merchantId) : null;
+  const label = b.labelId ? await db.get('media', b.labelId) : null;
+  const tastings = (await db.all('wines')).filter((w) => w.bottleId === id).sort((x, y) => (y.date || '').localeCompare(x.date || ''));
+  const ws = windowStatus(b);
+  const rows = [
+    ['Style', styleLabel(b)],
+    ['Grapes', b.grapes], ['Region', [b.region, b.country].filter(Boolean).join(', ')], ['ABV', b.abv ? b.abv + '%' : ''],
+    ['Where', b.location],
+    ['Drinking window', [b.drinkFrom, b.drinkTo].some(Boolean) ? `${b.drinkFrom || '…'} – ${b.drinkTo || '…'}` : ''],
+    ['Price', money(num(b.price))], ['Bought', [fmtDate(b.purchaseDate), b.bought ? `${b.bought} bottles` : ''].filter(Boolean).join(' · ')],
+  ].filter(([, v]) => v);
+  return shell(`
+    ${label ? `<div class="label-shot"><img src="${mediaURL(label)}" alt="Label"></div>` : ''}
+    <div class="bottle-head">
+      <div><div class="ec-name">${esc(wineTitle(b))}</div>${ws.label ? `<span class="pill win-${ws.k}">${esc(ws.label)}</span>` : ''}</div>
+      <div class="qty-ctl">
+        <button data-act="bottleQty" data-d="-1" aria-label="One less" ${b.qty > 0 ? '' : 'disabled'}>−</button>
+        <span><b>${b.qty || 0}</b><br><span class="muted tiny">in cellar</span></span>
+        <button data-act="bottleQty" data-d="1" aria-label="One more">+</button>
+      </div>
+    </div>
+    <button class="btn primary big-btn" data-act="openBottle" ${b.qty > 0 ? '' : 'disabled'}>🍷 Open a bottle and taste it</button>
+    <div class="card"><dl class="facts">${rows.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}
+      ${m ? `<dt>Merchant</dt><dd><a href="#/merchant/${m.id}">${esc(m.name)}</a></dd>` : ''}</dl>
+      ${b.notes ? `<p class="small">${esc(b.notes)}</p>` : ''}</div>
+    <div class="field-label">Tastings from this wine</div>
+    ${tastings.length ? tastings.map((w) => `<a class="card st-row" href="#/wine/${w.id}"><span class="st-name">${esc(fmtDate(w.date))}${w.place ? `<br><span class="muted small">${esc(w.place)}</span>` : ''}</span><span class="st-score">${w.tasting && w.tasting.score != null && w.tasting.score !== '' ? esc(formatScore(w.tasting.score, w.scale || 100)) : ''}</span></a>`).join('') : '<p class="muted small">None yet. Opening a bottle starts a tasting in My Wines.</p>'}
+    ${(b.log || []).length ? `<div class="field-label">History</div><ul class="log">${b.log.slice().reverse().slice(0, 12).map((l) => `<li><span class="muted small">${esc(fmtDate(l.date))}</span> ${esc(l.note)}</li>`).join('')}</ul>` : ''}
+  `, { title: 'Bottle', back: '#/cellar', actions: `<a class="icon-btn" href="#/bottle/${id}/edit" aria-label="Edit">✎</a>` });
+}
+
+// ---------- merchants
+const MERCHANT_KINDS = ['Wine shop', 'Importer', 'Producer', 'Online', 'Restaurant', 'Other'];
+
+async function merchantStats() {
+  const bottles = await db.all('bottles');
+  const by = {};
+  for (const b of bottles) {
+    if (!b.merchantId) continue;
+    const s = by[b.merchantId] || (by[b.merchantId] = { n: 0, spent: 0, last: '', bottles: [] });
+    const bought = b.bought ?? b.qty ?? 0;
+    s.n += bought; s.spent += bought * (num(b.price) || 0); s.bottles.push(b);
+    if ((b.purchaseDate || '') > s.last) s.last = b.purchaseDate;
+  }
+  return by;
+}
+
+async function viewMerchants() {
+  const ms = (await db.all('merchants')).sort((a, b) => a.name.localeCompare(b.name));
+  const st = await merchantStats();
+  const cards = ms.map((m) => {
+    const s = st[m.id];
+    return `<a class="card event-card" href="#/merchant/${m.id}">
+        <div class="ec-main"><div class="ec-name">${esc(m.name)}</div><div class="muted small">${esc([m.kind, m.city || m.address].filter(Boolean).join(' · '))}</div></div>
+        <div class="ec-meta">${s ? `<span class="pill">${s.n} bottle${s.n === 1 ? '' : 's'}</span>${s.spent ? `<span class="muted small">${esc(money(s.spent))}</span>` : ''}` : '<span class="muted small">no purchases</span>'}</div>
+      </a>`;
+  }).join('');
+  const empty = `<div class="empty"><div class="empty-icon">🏪</div><p><b>No merchants yet.</b></p><p class="muted">Keep the shops, importers and producers you buy from: contacts, what you bought there and what you paid.</p></div>`;
+  return shell(`${ms.length ? cards : empty}<a class="fab" href="#/merchant/new">+ New merchant</a>`, { title: 'Merchants', tab: 'merchants' });
+}
+
+async function viewMerchantForm(id) {
+  const m = id ? await db.get('merchants', id) : { name: '', kind: 'Wine shop' };
+  return shell(`
+    <form class="form" id="merchantForm" data-id="${attr(id || '')}">
+      <label>Name<input name="name" required value="${attr(m.name)}" placeholder="Corner Wine Shop"></label>
+      <label>Type<select name="kind">${MERCHANT_KINDS.map((k) => `<option ${m.kind === k ? 'selected' : ''}>${k}</option>`).join('')}</select></label>
+      <label>Contact person<input name="contact" value="${attr(m.contact)}"></label>
+      <div class="row2">
+        <label>Phone<input name="phone" type="tel" value="${attr(m.phone)}"></label>
+        <label>Email<input name="email" type="email" value="${attr(m.email)}"></label>
+      </div>
+      <label>Website<input name="website" type="url" inputmode="url" value="${attr(m.website)}" placeholder="https://"></label>
+      <label>Address<input name="address" value="${attr(m.address)}"></label>
+      <label>City<input name="city" value="${attr(m.city)}"></label>
+      <label>Notes<textarea name="notes" rows="4" placeholder="Good for Burgundy, ask for Ayşe, 10% off cases…">${esc(m.notes || '')}</textarea></label>
+      <button class="btn primary" type="submit">${id ? 'Save' : 'Add merchant'}</button>
+      ${id ? '<button class="btn danger" type="button" data-act="deleteMerchant">Delete merchant</button>' : ''}
+    </form>
+  `, { title: id ? 'Edit merchant' : 'New merchant', back: id ? `#/merchant/${id}` : (ui.merchantReturn || '#/merchants') });
+}
+
+async function viewMerchant(id) {
+  const m = await db.get('merchants', id);
+  if (!m) return shell('<p class="muted center">Merchant not found.</p>', { title: 'Merchants', back: '#/merchants' });
+  const s = (await merchantStats())[id] || { n: 0, spent: 0, bottles: [] };
+  const site = m.website && /^https?:\/\//i.test(m.website) ? m.website : (m.website ? 'https://' + m.website : '');
+  const links = [
+    m.phone ? `<a class="btn" href="tel:${attr(m.phone.replace(/\s/g, ''))}">📞 Call</a>` : '',
+    m.email ? `<a class="btn" href="mailto:${attr(m.email)}">✉️ Email</a>` : '',
+    site ? `<a class="btn" href="${attr(site)}" target="_blank" rel="noopener">🌐 Website</a>` : '',
+    m.address || m.city ? `<a class="btn" href="${mapURL({ place: [m.name, m.address, m.city].filter(Boolean).join(', ') })}" target="_blank" rel="noopener">📍 Map</a>` : '',
+  ].filter(Boolean);
+  const purchases = s.bottles.sort((a, b) => (b.purchaseDate || '').localeCompare(a.purchaseDate || ''));
+  return shell(`
+    <div class="event-head"><div class="muted">${esc([m.kind, m.contact, m.address, m.city].filter(Boolean).join(' · '))}</div></div>
+    ${links.length ? `<div class="link-grid">${links.join('')}</div>` : ''}
+    ${m.notes ? `<div class="card small">${esc(m.notes)}</div>` : ''}
+    <div class="stats"><div><b>${s.n}</b><span>bottles bought</span></div><div><b>${esc(money(s.spent) || '–')}</b><span>spent</span></div><div><b>${esc(s.last ? fmtDate(s.last) : '–')}</b><span>last purchase</span></div></div>
+    <div class="field-label">Purchases</div>
+    ${purchases.map((b) => `<a class="card st-row" href="#/bottle/${b.id}"><span class="dot dot-${b.colour || 'none'}"></span><span class="st-name">${esc(wineTitle(b))}<br><span class="muted small">${esc([fmtDate(b.purchaseDate), `${b.bought ?? b.qty ?? 0} × ${money(num(b.price)) || '?'}`].filter(Boolean).join(' · '))}</span></span><span class="muted small">${b.qty || 0} left</span></a>`).join('') || '<p class="muted small">Nothing bought here yet.</p>'}
+    <a class="btn primary" href="#/cellar/new/m/${id}">+ Add bottles bought here</a>
+  `, { title: m.name, back: '#/merchants', actions: `<a class="icon-btn" href="#/merchant/${id}/edit" aria-label="Edit merchant">✎</a>` });
 }
 
 // ---------- settings
@@ -709,13 +1026,27 @@ async function viewSettings() {
       <div class="field-label">Tasting note format</div>
       <div class="seg">${['full', 'short', 'social'].map((s) => `<label><input type="radio" name="noteFormat" value="${s}" ${settings.noteFormat === s ? 'checked' : ''} data-act-change="noteFormat"><span>${{ full: 'WSET full', short: 'Short', social: 'Social' }[s]}</span></label>`).join('')}</div>
     </section>
+    <section class="set-sec" id="ai">
+      <h2>AI label scan</h2>
+      <p class="muted small">Reads producer, wine, vintage, region, grapes and ABV from a label photo, using Claude. It needs your own Anthropic API key (create one at console.anthropic.com, under API keys). The key stays on this device only. It is not part of backups and is sent only to Anthropic. Each scan costs about one US cent.</p>
+      ${apiKey ? `<p class="small">✅ Key saved (…${esc(apiKey.slice(-4))})</p>
+        <div class="row2"><button class="btn" data-act="testKey">Test key</button><button class="btn danger" data-act="removeKey">Remove key</button></div>`
+        : `<label class="block-label">API key<input id="apiKeyInput" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="sk-ant-…"></label>
+        <button class="btn primary" data-act="saveKey">Save key</button>`}
+      <label class="switch-row"><span><b>Read labels automatically</b><br><span class="muted small">Scan as soon as you take a label photo.</span></span>
+        <input type="checkbox" ${settings.autoScan ? 'checked' : ''} data-act-change="autoScan"><i></i></label>
+    </section>
+    <section class="set-sec">
+      <h2>Cellar and merchants</h2>
+      <label class="block-label">Currency symbol<input value="${attr(settings.currency)}" data-act-change="currency" maxlength="4" placeholder="€"></label>
+    </section>
     <section class="set-sec">
       <h2>My lexicon</h2>
       <div class="chips">${(settings.customLexicon || []).map((d) => `<button class="chip" data-act="delLex" data-v="${attr(d)}">${esc(d)} ✕</button>`).join('') || '<span class="muted small">Descriptors you add while tasting appear here.</span>'}</div>
     </section>
     <section class="set-sec">
       <h2>Data</h2>
-      <p class="muted small">Everything is stored on this device only${persisted ? ' (protected from automatic clean-up)' : ''}. iPhone and iPad keep separate data for now; export here and import on the other device to move it.</p>
+      <p class="muted small">Everything is stored on this device only${persisted ? ' (protected from automatic clean-up)' : ''}. iPhone and iPad keep separate data for now; export here and import on the other device to move it. Backups hold events, wines, cellar and merchants, but not photos or your API key.</p>
       <div class="row2"><button class="btn" data-act="export">Export backup</button><label class="btn">Import backup<input type="file" accept="application/json,.json" hidden data-import></label></div>
       <button class="btn danger" data-act="wipe">Delete all data</button>
     </section>
@@ -736,6 +1067,18 @@ async function route() {
   let html;
   try {
     if (!p.length) html = await viewEvents();
+    else if (p[0] === 'new') html = viewNewTasting();
+    else if (p[0] === 'mywines') html = await viewMyWines();
+    else if (p[0] === 'single' && p[1] === 'new') html = await viewSingleForm();
+    else if (p[0] === 'single' && p[2] === 'edit') html = await viewSingleForm(p[1]);
+    else if (p[0] === 'cellar' && p[1] === 'new') html = await viewBottleForm(null, p[2] === 'm' ? p[3] : null);
+    else if (p[0] === 'cellar') html = await viewCellar();
+    else if (p[0] === 'bottle' && p[2] === 'edit') html = await viewBottleForm(p[1]);
+    else if (p[0] === 'bottle') html = await viewBottle(p[1]);
+    else if (p[0] === 'merchants') html = await viewMerchants();
+    else if (p[0] === 'merchant' && p[1] === 'new') html = await viewMerchantForm();
+    else if (p[0] === 'merchant' && p[2] === 'edit') html = await viewMerchantForm(p[1]);
+    else if (p[0] === 'merchant') html = await viewMerchant(p[1]);
     else if (p[0] === 'standings') html = await viewStandings();
     else if (p[0] === 'settings') html = await viewSettings();
     else if (p[0] === 'event' && p[1] === 'new') html = await viewEventForm();
@@ -776,6 +1119,8 @@ async function hydrateMedia() {
 const rerender = () => route();
 const currentWineId = () => { const p = location.hash.split('/'); return p[1] === 'wine' ? p[2] : null; };
 const currentEventId = () => { const p = location.hash.split('/'); return p[1] === 'event' ? p[2] : null; };
+const currentId = (kind) => { const p = location.hash.split('/'); return p[1] === kind ? p[2] : null; };
+const onBottleForm = () => !!$app.querySelector('#bottleForm');
 
 async function withWine(fn, render = true) {
   const id = currentWineId();
@@ -798,7 +1143,7 @@ const actions = {
       set = t.values[f] !== el.dataset.v;
       t.values[f] = set ? el.dataset.v : undefined;
       if (f === 'quality' && set && !t.scoreTouched) {
-        const ev = await db.get('events', w.eventId);
+        const ev = (await wineCtx(w)).event;
         const band = bandFor(el.dataset.v, ev.scale);
         if (band) { const mid = (band[0] + band[1]) / 2; t.score = ev.scale === 20 ? Math.round(mid * 2) / 2 : Math.round(mid); }
       }
@@ -822,7 +1167,8 @@ const actions = {
   async styleTile(el) {
     const s = STYLE_TILES.find((x) => x.k === el.dataset.v);
     const apply = (w) => { w.colour = s.colour; w.type = s.type; w.sweet = !!s.sweet; };
-    if (location.hash.includes('/add') || location.hash.endsWith('/edit')) { readWineForm(); apply(draftWine); rerender(); return; }
+    if (onBottleForm()) { readBottleForm(); apply(draftBottle); rerender(); return; }
+    if ($app.querySelector('#wineForm, #singleForm')) { readWineForm(); apply(draftWine); rerender(); return; }
     await withWine((w) => apply(w), false);
     ui.scrollNext = 'style';
     rerender();
@@ -880,10 +1226,10 @@ const actions = {
   async finish(el) {
     await flushWine();
     const next = el.dataset.next;
-    let eventId;
-    await withWine((w, t) => { t.values.flavours = flavoursOf(t); t.done = true; t.finishedAt = Date.now(); eventId = w.eventId; }, false);
+    let back;
+    await withWine((w, t) => { t.values.flavours = flavoursOf(t); t.done = true; t.finishedAt = Date.now(); back = backFor(w); }, false);
     toast('Tasting saved');
-    go(next ? `#/wine/${next}` : `#/event/${eventId}`);
+    go(next ? `#/wine/${next}` : back);
   },
   async noteFmt(el) { ui.noteFormat = el.dataset.v; rerender(); },
   async copyNote() {
@@ -923,20 +1269,82 @@ const actions = {
   async deleteWine() {
     if (!(await ask('Delete this wine and its tasting?', 'Delete'))) return;
     await db.del('wines', draftWine.id);
-    go(`#/event/${draftWine.eventId}`);
+    go(backFor(draftWine));
   },
   async delLex(el) { settings.customLexicon = settings.customLexicon.filter((d) => d !== el.dataset.v); await saveSettings(); rerender(); },
   async export() {
-    const data = { app: 'tasting', version: 1, exportedAt: new Date().toISOString(), settings, events: await db.all('events'), wines: await db.all('wines') };
+    const data = { app: 'tasting', version: 2, exportedAt: new Date().toISOString(), settings, events: await db.all('events'), wines: await db.all('wines'), bottles: await db.all('bottles'), merchants: await db.all('merchants') };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const file = new File([blob], `tasting-backup-${today()}.json`, { type: 'application/json' });
     if (navigator.canShare && navigator.canShare({ files: [file] })) { try { await navigator.share({ files: [file] }); return; } catch (e) { /* fall through */ } }
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob); a.download = file.name; a.click();
   },
+  async scanLabel(el) { await runScan(el.dataset.kind); },
+  async useLocation() {
+    readWineForm();
+    if (!navigator.geolocation) { toast('Location is not available here'); return; }
+    toast('Finding your location…');
+    navigator.geolocation.getCurrentPosition((pos) => {
+      draftWine.lat = +pos.coords.latitude.toFixed(5); draftWine.lng = +pos.coords.longitude.toFixed(5);
+      if (draftWine.saved) db.put('wines', draftWine);
+      toast('Location saved'); rerender();
+    }, () => toast('Could not get your location. Check location permission for Safari.'), { enableHighAccuracy: false, timeout: 15000, maximumAge: 300000 });
+  },
+  async cellarFilter(el) { ui.cellarFilter = el.dataset.v; rerender(); },
+  async bottleQty(el) {
+    const b = await db.get('bottles', currentId('bottle'));
+    const d = +el.dataset.d;
+    b.qty = Math.max(0, (b.qty || 0) + d);
+    if (d > 0) b.bought = (b.bought || 0) + d;
+    b.log = [...(b.log || []), { date: today(), note: d > 0 ? 'Added a bottle' : 'Removed a bottle' }];
+    await db.put('bottles', b); rerender();
+  },
+  async openBottle() {
+    const b = await db.get('bottles', currentId('bottle'));
+    if (!b || !(b.qty > 0)) return;
+    if (!(await ask(`Open a bottle of ${wineTitle(b)}? ${b.qty - 1} will be left in the cellar.`, 'Open & taste'))) return;
+    const w = { id: uid(), eventId: null, single: true, saved: true, createdAt: Date.now(), date: today(), place: '', scale: settings.scale, bottleId: b.id };
+    for (const k of ['producer', 'name', 'vintage', 'abv', 'region', 'country', 'grapes', 'colour', 'type', 'sweet']) if (b[k] !== undefined) w[k] = b[k];
+    w.price = b.price ? money(num(b.price)) : '';
+    if (b.labelId) {
+      const lm = await db.get('media', b.labelId);
+      if (lm) { const copy = { ...lm, id: uid(), owner: 'label:' + w.id }; await db.put('media', copy); w.labelId = copy.id; }
+    }
+    await db.put('wines', w);
+    b.qty -= 1;
+    b.log = [...(b.log || []), { date: today(), note: 'Opened a bottle', wineId: w.id }];
+    await db.put('bottles', b);
+    toast('Enjoy! Tasting started.');
+    go(`#/wine/${w.id}`);
+  },
+  async deleteBottle() {
+    if (!(await ask('Delete this wine from your cellar? Tastings you made from it are kept.', 'Delete'))) return;
+    await db.del('bottles', draftBottle.id);
+    go('#/cellar');
+  },
+  async newMerchantFromBottle() { readBottleForm(); ui.merchantReturn = location.hash; go('#/merchant/new'); },
+  async deleteMerchant() {
+    const id = $app.querySelector('#merchantForm').dataset.id;
+    if (!(await ask('Delete this merchant? Bottles bought there stay in your cellar.', 'Delete'))) return;
+    for (const b of (await db.all('bottles')).filter((x) => x.merchantId === id)) { b.merchantId = ''; await db.put('bottles', b); }
+    await db.del('merchants', id);
+    go('#/merchants');
+  },
+  async saveKey() {
+    const v = ($app.querySelector('#apiKeyInput').value || '').trim();
+    if (!v) return;
+    try { await testKey(v); } catch (e) { toast(e.message); return; }
+    apiKey = v; await db.setKV('apiKey', v); toast('Key saved. Label scan is on.'); rerender();
+  },
+  async removeKey() {
+    if (!(await ask('Remove the API key from this device? Label scan turns off.', 'Remove'))) return;
+    apiKey = ''; await db.setKV('apiKey', ''); rerender();
+  },
+  async testKey() { try { await testKey(apiKey); toast('The key works ✓'); } catch (e) { toast(e.message); } },
   async wipe() {
-    if (!(await ask('Delete all events, wines, photos and settings on this device?', 'Delete all'))) return;
-    await db.clearAll(); settings = { ...DEFAULT_SETTINGS, customLexicon: [] }; go('#/'); rerender();
+    if (!(await ask('Delete all events, wines, cellar, merchants, photos and settings on this device?', 'Delete all'))) return;
+    await db.clearAll(); settings = { ...DEFAULT_SETTINGS, customLexicon: [] }; apiKey = ''; go('#/'); rerender();
   },
 };
 
@@ -949,6 +1357,8 @@ const changeActions = {
   async defaultMode(el) { settings.mode = el.value; await saveSettings(); },
   async standingsFilter(el) { ui.standingsFilter = el.value; rerender(); },
   async showTannin(el) { await withWine((w, t) => { t.showTannin = el.checked; }); },
+  async autoScan(el) { settings.autoScan = el.checked; await saveSettings(); },
+  async currency(el) { settings.currency = el.value.trim(); await saveSettings(); },
 };
 
 document.addEventListener('click', (e) => {
@@ -993,7 +1403,7 @@ document.addEventListener('input', async (e) => {
     saveWineSoon(w);
     const out = $app.querySelector('#noteOut');
     if (out) {
-      const event = await db.get('events', w.eventId);
+      const { event } = await wineCtx(w);
       out.textContent = generateNote(ui.noteFormat || settings.noteFormat, w, derived(t), getLevel(t.methodId, t.levelId), event);
     }
   }
@@ -1034,27 +1444,88 @@ document.addEventListener('submit', async (e) => {
     w.saved = true;
     await db.put('wines', w);
     go(isNew ? `#/event/${w.eventId}` : `#/wine/${w.id}`);
+  } else if (form.id === 'singleForm') {
+    readWineForm();
+    const w = draftWine;
+    const isNew = !w.saved;
+    if (isNew) w.createdAt = Date.now();
+    w.saved = true;
+    await db.put('wines', w);
+    go(`#/wine/${w.id}`);
+  } else if (form.id === 'bottleForm') {
+    readBottleForm();
+    const b = draftBottle;
+    const isNew = !b.saved;
+    if (isNew) { b.createdAt = Date.now(); b.bought = b.qty; b.log = [{ date: b.purchaseDate || today(), note: `Added ${b.qty} bottle${b.qty === 1 ? '' : 's'}` }]; }
+    b.saved = true;
+    await db.put('bottles', b);
+    toast(isNew ? 'Added to your cellar' : 'Saved');
+    go(`#/bottle/${b.id}`);
+  } else if (form.id === 'merchantForm') {
+    const fd = new FormData(form);
+    const id = form.dataset.id;
+    const m = id ? await db.get('merchants', id) : { id: uid(), createdAt: Date.now() };
+    for (const k of ['name', 'kind', 'contact', 'phone', 'email', 'website', 'address', 'city', 'notes']) m[k] = (fd.get(k) || '').trim();
+    await db.put('merchants', m);
+    const back = ui.merchantReturn;
+    ui.merchantReturn = null;
+    if (!id && back && draftBottle) { draftBottle.merchantId = m.id; go(back); } else go(`#/merchant/${m.id}`);
   }
 });
 
 function readWineForm() {
-  const form = $app.querySelector('#wineForm');
+  const form = $app.querySelector('#wineForm, #singleForm');
   if (!form || !draftWine) return;
-  for (const k of ['producer', 'name', 'vintage', 'abv', 'region', 'country', 'grapes', 'price']) {
+  for (const k of ['producer', 'name', 'vintage', 'abv', 'region', 'country', 'grapes', 'price', 'date', 'place']) {
     if (form.elements[k]) draftWine[k] = form.elements[k].value.trim();
   }
+  if (form.elements.scale) { const r = form.querySelector('input[name="scale"]:checked'); if (r) draftWine.scale = +r.value; }
+}
+
+// Read the label photo of the wine or bottle being edited with AI and fill the form.
+async function runScan(kind) {
+  const isBottle = kind === 'bottle';
+  if (isBottle) readBottleForm(); else readWineForm();
+  const obj = isBottle ? draftBottle : draftWine;
+  if (!obj || !obj.labelId) return;
+  const m = await db.get('media', obj.labelId);
+  if (!m) return;
+  ui.scanState = { id: obj.id, busy: true };
+  rerender();
+  try {
+    const r = await scanLabel(m.blob, apiKey);
+    const filled = [];
+    for (const [k, v] of Object.entries(r.fields)) { obj[k] = v; filled.push(k); }
+    if (r.colour && (!obj.colour || filled.length)) { obj.colour = r.colour; obj.type = r.type || 'still'; obj.sweet = r.sweet; }
+    if (isBottle) {
+      if (r.drinkFrom && !obj.drinkFrom) { obj.drinkFrom = r.drinkFrom; filled.push('drinkFrom'); }
+      if (r.drinkTo && !obj.drinkTo) { obj.drinkTo = r.drinkTo; filled.push('drinkTo'); }
+    }
+    ui.aiFilled[obj.id] = { fields: filled, uncertain: r.uncertain.filter((u) => filled.includes(u)) };
+    ui.scanState = { id: obj.id, done: true };
+    if (!isBottle && obj.saved) await db.put('wines', obj);
+    if (isBottle && obj.saved) await db.put('bottles', obj);
+    toast(filled.length ? 'Label read ✓' : 'Nothing readable on this label');
+  } catch (e) {
+    ui.scanState = { id: obj.id, error: e.message };
+  }
+  rerender();
 }
 
 async function handleUpload(el) {
   const files = [...el.files];
   if (!files.length) return;
   const owner = el.dataset.upload;
-  if (owner === 'label') {
-    readWineForm();
-    const m = await addMedia('label:' + draftWine.id, 'image', files[0]);
-    if (draftWine.labelId) await db.del('media', draftWine.labelId);
-    draftWine.labelId = m.id;
-    if (await db.get('wines', draftWine.id)) await db.put('wines', draftWine);
+  if (owner === 'label' || owner === 'blabel') {
+    const isBottle = owner === 'blabel';
+    if (isBottle) readBottleForm(); else readWineForm();
+    const obj = isBottle ? draftBottle : draftWine;
+    const m = await addMedia('label:' + obj.id, 'image', files[0]);
+    if (obj.labelId) await db.del('media', obj.labelId);
+    obj.labelId = m.id;
+    ui.scanState = null;
+    if (await db.get(isBottle ? 'bottles' : 'wines', obj.id)) await db.put(isBottle ? 'bottles' : 'wines', obj);
+    if (apiKey && settings.autoScan) { await runScan(isBottle ? 'bottle' : 'wine'); return; }
   } else {
     for (const f of files) await addMedia(owner, f.type.startsWith('video/') ? 'video' : 'image', f);
     toast(files.length === 1 ? 'Added' : `Added ${files.length}`);
@@ -1068,9 +1539,12 @@ async function handleImport(el) {
   try {
     const data = JSON.parse(await f.text());
     if (data.app !== 'tasting') throw new Error('Not a tasting backup');
-    if (!(await ask(`Import ${data.events.length} events and ${data.wines.length} wines? Items with the same id are replaced.`, 'Import'))) return;
+    const bottles = data.bottles || [], merchants = data.merchants || [];
+    if (!(await ask(`Import ${data.events.length} events, ${data.wines.length} wines, ${bottles.length} cellar wines and ${merchants.length} merchants? Items with the same id are replaced.`, 'Import'))) return;
     for (const ev of data.events) await db.put('events', ev);
     for (const w of data.wines) await db.put('wines', w);
+    for (const b of bottles) await db.put('bottles', b);
+    for (const m of merchants) await db.put('merchants', m);
     toast('Imported');
     rerender();
   } catch (err) { toast('Import failed: ' + err.message); }
@@ -1080,6 +1554,7 @@ async function handleImport(el) {
 async function boot() {
   settings = { ...DEFAULT_SETTINGS, ...(await db.getKV('settings', {})) };
   settings.customLexicon = settings.customLexicon || [];
+  apiKey = (await db.getKV('apiKey', '')) || '';
   window.addEventListener('hashchange', route);
   await route();
   requestPersistence();

@@ -63,7 +63,7 @@ main.with-tabs { padding-bottom: calc(150px + var(--safe-bottom)); }
   backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
   border-top: 1px solid var(--line);
 }
-.tabbar a { display: flex; flex-direction: column; align-items: center; font-size: 11px; color: var(--muted); min-width: 72px; padding: 4px; }
+.tabbar a { display: flex; flex-direction: column; align-items: center; font-size: 10.5px; color: var(--muted); flex: 1 1 0; min-width: 0; max-width: 96px; padding: 4px 0; white-space: nowrap; }
 .tabbar a.on { color: var(--wine); font-weight: 600; }
 .tabbar .ti { font-size: 22px; line-height: 1.2; }
 
@@ -325,3 +325,42 @@ textarea { resize: vertical; }
   .qpicks { grid-template-columns: repeat(5, minmax(0, 1fr)); }
   .tiles6 { grid-template-columns: repeat(6, minmax(0, 1fr)); }
 }
+
+/* ---------- wine assistant: home tabs, My Wines, cellar, merchants, AI scan */
+.seg > a { flex: 1; display: block; text-align: center; padding: 8px 6px; border-radius: 8px; color: var(--ink); font-size: 14px; }
+.seg > a.on { background: var(--card); font-weight: 600; box-shadow: var(--shadow); }
+.choice { display: flex; gap: 14px; align-items: center; }
+.choice-icon { font-size: 30px; flex: none; width: 44px; text-align: center; }
+.group-head { font-weight: 700; margin: 18px 0 8px; font-size: 15px; }
+.group-head:first-of-type { margin-top: 4px; }
+.stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-bottom: 12px; }
+.stats > div { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 10px 8px; text-align: center; overflow: hidden; }
+.stats b { display: block; font-size: 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stats span { font-size: 12px; color: var(--muted); }
+.qty { font-weight: 700; font-size: 17px; color: var(--ink); padding: 4px 10px; border-radius: 99px; background: var(--chip); flex: none; }
+.qty.soon, .qty.past { background: #f9eeda; color: #8a5a00; }
+.pill.win-soon, .pill.win-past { background: #f9eeda; color: #8a5a00; }
+.pill.win-ready { background: #e5f4e4; color: var(--ok); }
+.bottle-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin: 4px 0 8px; }
+.bottle-head .pill { margin-top: 4px; }
+.qty-ctl { display: flex; align-items: center; gap: 8px; text-align: center; flex: none; }
+.qty-ctl button { width: 42px; height: 42px; border-radius: 50%; border: 1px solid var(--line); background: var(--card); font-size: 22px; cursor: pointer; color: var(--ink); }
+.qty-ctl button:disabled { opacity: .3; }
+.qty-ctl b { font-size: 22px; }
+.facts { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; margin: 0; font-size: 14px; }
+.facts dt { color: var(--muted); }
+.facts dd { margin: 0; }
+.log { list-style: none; padding: 0; margin: 0 0 12px; font-size: 14px; }
+.log li { padding: 6px 0; border-bottom: 1px solid var(--line); }
+.link-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; margin-bottom: 8px; }
+.link-grid .btn { margin: 0; }
+.loc-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; }
+.loc-row .btn { margin: 0 0 8px; }
+.ai-tag { font-size: 10px; font-weight: 700; color: var(--ok); background: #e5f4e4; padding: 1px 6px; border-radius: 99px; vertical-align: middle; }
+.ai-tag.warn { color: #8a5a00; background: #f9eeda; }
+.form label.ai-check input { border-color: #d9a441; box-shadow: 0 0 0 2px #f9eeda; }
+.form label.ai-ok input { border-color: var(--ok); }
+.scan-status { display: flex; align-items: center; justify-content: center; gap: 8px; color: var(--muted); font-size: 14px; }
+.spin { width: 16px; height: 16px; border: 2px solid var(--line); border-top-color: var(--wine); border-radius: 50%; animation: spin .8s linear infinite; display: inline-block; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.btn[disabled] { opacity: .45; }

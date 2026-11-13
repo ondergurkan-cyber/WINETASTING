@@ -1,8 +1,8 @@
 // Tiny IndexedDB wrapper. Everything is stored on the device, offline.
-// Stores: events, wines, media (photo/video blobs), kv (settings).
+// Stores: events, wines, media (photo/video blobs), kv (settings), bottles (cellar), merchants.
 
 const DB_NAME = 'tasting-app';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 let dbp;
 
 function open() {
@@ -21,6 +21,8 @@ function open() {
         s.createIndex('owner', 'owner');
       }
       if (!db.objectStoreNames.contains('kv')) db.createObjectStore('kv');
+      if (!db.objectStoreNames.contains('bottles')) db.createObjectStore('bottles', { keyPath: 'id' });
+      if (!db.objectStoreNames.contains('merchants')) db.createObjectStore('merchants', { keyPath: 'id' });
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
@@ -51,7 +53,7 @@ export const db = {
   async getKV(key, fallback) { const v = await wrap((await store('kv')).get(key)); return v === undefined ? fallback : v; },
   async setKV(key, value) { return wrap((await store('kv', 'readwrite')).put(value, key)); },
   async clearAll() {
-    for (const n of ['events', 'wines', 'media', 'kv']) await wrap((await store(n, 'readwrite')).clear());
+    for (const n of ['events', 'wines', 'media', 'kv', 'bottles', 'merchants']) await wrap((await store(n, 'readwrite')).clear());
   },
 };
 
