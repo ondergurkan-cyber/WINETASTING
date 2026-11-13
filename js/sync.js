@@ -89,6 +89,36 @@ async function startSession(s) {
   await syncNow();
 }
 
+// Email for a new password. The link opens the app (Supabase: Authentication → URL Configuration → Site URL).
+export async function resetPassword(email) {
+  const back = location.origin + location.pathname;
+  await call('/auth/v1/recover?redirect_to=' + encodeURIComponent(back), { method: 'POST', body: { email }, auth: false });
+}
+
+// A link from a Supabase email (password reset or email confirmation) lands here with the session in the URL.
+// Returns 'recovery', 'signin', an error message, or '' when the URL holds nothing for us.
+export async function fromEmailLink() {
+  const h = location.hash.replace(/^#\/?/, '');
+  if (!/(access_token|error_description)=/.test(h)) return '';
+  const q = new URLSearchParams(h);
+  history.replaceState(null, '', location.pathname + '#/settings');
+  if (q.get('error_description')) return q.get('error_description').replace(/\+/g, ' ');
+  if (!configured()) return '';
+  session = { access_token: q.get('access_token'), refresh_token: q.get('refresh_token'), expires_at: +(q.get('expires_at')) || Math.floor(Date.now() / 1000) + (+(q.get('expires_in')) || 3600), user: { id: '', email: '' } };
+  try {
+    const u = await call('/auth/v1/user');
+    session.user = { id: u.id, email: u.email };
+  } catch (e) { session = null; return e.message; }
+  await db.setKVRemote('sync:session', session);
+  set({ status: 'idle', message: '' });
+  schedule(0);
+  return q.get('type') === 'recovery' ? 'recovery' : 'signin';
+}
+
+export async function setPassword(password) {
+  await call('/auth/v1/user', { method: 'PUT', body: { password } });
+}
+
 export async function signOut() {
   try { await call('/auth/v1/logout', { method: 'POST' }); } catch (e) { /* offline is fine */ }
   session = null;
