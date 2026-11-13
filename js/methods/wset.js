@@ -96,7 +96,7 @@ const LEX_L4 = [
 ];
 
 // ---------- Structure+ (Beyond Flavour, optional) ----------
-// Shown only when Settings > Structure+ is on. Not part of the WSET SAT.
+// Shown only when Settings > Advanced is on (off by default). Not part of the WSET SAT.
 const STRUCTURE_PLUS = {
   appearance: [
     { id: 'sp_brightness', label: 'Brightness', type: 'single', options: ['dull', 'bright', 'brilliant'], plus: true },
