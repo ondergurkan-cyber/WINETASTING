@@ -832,8 +832,6 @@ main.home { max-width: 1040px; }
 .split-key b { font-family: var(--f-display); font-weight: 400; font-size: 1.0625rem; margin-left: 2px; }
 .taste-facts { margin-top: 14px; padding-top: 12px; border-top: 1px dashed var(--line); }
 
-/* this book */
-.book-facts .facts { background: var(--card); border: 1px solid var(--line); border-radius: var(--r-md); padding: 14px 16px; }
 .home-empty { padding-top: 24px; padding-bottom: 16px; }
 .start-list { max-width: 560px; margin: 0 auto; }
 

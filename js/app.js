@@ -208,7 +208,7 @@ function topCounts(list, n = 3) {
 }
 
 async function viewHome() {
-  const [events, allWines, bottles, merchants, mediaIds] = await Promise.all([db.all('events'), db.all('wines'), db.all('bottles'), db.all('merchants'), db.keys('media')]);
+  const [events, allWines, bottles, merchants] = await Promise.all([db.all('events'), db.all('wines'), db.all('bottles'), db.all('merchants')]);
   const evById = Object.fromEntries(events.map((e) => [e.id, e]));
   const y = String(thisYear());
   const now = today();
@@ -249,7 +249,6 @@ async function viewHome() {
         <a class="card choice" href="#/cellar/new"><span class="choice-icon">${icon('bottle', 26)}</span><span><b>Add bottles</b><br><span class="muted small">What you own, where it sits, when to drink it.</span></span></a>
         <a class="card choice" href="#/merchant/new"><span class="choice-icon">${icon('shop', 26)}</span><span><b>Add a merchant</b><br><span class="muted small">The shops and importers you buy from.</span></span></a>
       </div>
-      ${homeFooter(mediaIds.length)}
     `, { title: 'Home', tab: 'home' });
   }
 
@@ -400,24 +399,8 @@ async function viewHome() {
       <div class="home-col">${timeline}</div>
       <div class="home-col">${top}${taste}</div>
     </div>
-    ${fleuron()}
-    ${homeFooter(mediaIds.length)}
     <a class="fab" href="#/new">+ New tasting</a>
   `, { title: 'Home', tab: 'home' });
-}
-
-function homeFooter(mediaCount) {
-  const level = getLevel(settings.method, settings.level);
-  const s = syncInfo();
-  return `<section class="home-sec book-facts" aria-labelledby="h-book">
-      <h2 class="sec-h" id="h-book">This book</h2>
-      <dl class="facts">
-        <dt>Method</dt><dd>${esc(getMethod(settings.method).name)} ${esc(level.name)} · ${settings.mode === 'quick' ? 'Quick' : 'Full SAT'}${settings.advanced ? ' · Advanced' : ''}</dd>
-        <dt>Media</dt><dd>${esc(plural(mediaCount, 'photo or video', 'photos and videos'))}</dd>
-        <dt>Sync</dt><dd data-sync-line>${esc(s ? s.label : 'This device only')}</dd>
-      </dl>
-      <a class="more" href="#/settings">Settings ${icon('next', 16)}</a>
-    </section>`;
 }
 
 // ---------- new tasting: event or single wine
