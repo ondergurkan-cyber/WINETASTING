@@ -12,11 +12,16 @@ It is an installable web app (PWA): plain HTML, CSS and JavaScript with no build
 - **Tasting:** Style → Appearance → Nose → Palate → Conclusions → Wrap-up. The form is drawn from the SAT level and filtered by colour and type (tannin only for reds unless switched on, mousse only for sparkling, colour options per colour). Lexicon clusters for the wine's colour show first; the rest sit under "More clusters". Add your own descriptors. "Copy from nose" for the palate. BLIC helper suggests a quality level.
 - **Structure+ (optional):** acid shape and feel, tannin location and texture, phenolic bitterness, brightness and rim (from Beyond Flavour). Not part of the SAT; they feed the guess.
 - **Wrap-up:** GUESS (ranked candidates with reasons), SCORE (suggested range from the SAT quality level), my notes, generated tasting note in three formats (WSET full, short, social) with Copy and Share, photos, and Reveal with "right / close / wrong".
-- **Standings tab on Home** across all events, filterable by colour or event.
+- **Standings tab on Home** across all events and My Wines, filterable by colour, event or My Wines.
+- **New tasting:** choose **Event** or **Single wine**, or open a bottle from the cellar.
+- **My Wines:** single tastings (a restaurant, a dinner) outside events, grouped by month, each with date, place (plus optional saved location and map link), score scale, photos and the same tasting sheet.
+- **AI label scan:** take a label photo and Claude reads producer, wine, vintage, region, country, grapes, ABV, style (and a drinking-window estimate for the cellar). Uncertain fields are marked "check". Uses your own Anthropic API key, entered in Settings, stored only on the device and never exported. Works for event wines (hidden in blind events), single wines and cellar bottles.
+- **Cellar:** bottles you own with quantity, location, price, merchant, purchase date, drinking window ("Drink soon" filter), history log. **Open a bottle and taste it** takes one out and starts a My Wines tasting linked to the bottle.
+- **Merchants:** shops, importers and producers you buy from, with contact links (call, email, website, map), notes, purchases, bottles bought and total spent.
 
 ## Not yet
 
-- AI label reading (needs an API key and a small server; the photo is captured already).
+- Outside scores and prices (Vivino has no public API; a licensed source such as the Wine-Searcher API needs approval). When other people use the app, the AI key should move to a small server.
 - Sync between iPhone and iPad (use Export/Import for now).
 - Guess knowledge base is v0 (~45 classic profiles in `js/profiles.js`), no LLM explanations yet, no accuracy stats.
 
