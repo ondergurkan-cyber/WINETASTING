@@ -4,6 +4,7 @@ import { generateNote, wineTitle, formatScore } from './note.js';
 import { guess, explain } from './guess.js';
 import { scanLabel, testKey } from './scan.js';
 import { icon, engraving } from './icons.js';
+import { homePlate, fleuron, tasteGlass } from './plate.js';
 import * as sync from './sync.js';
 
 // ---------------------------------------------------------------- helpers
@@ -233,11 +234,11 @@ async function viewHome() {
   const boughtYear = bottles.filter((b) => inYear(b.purchaseDate)).reduce((n, b) => n + (b.bought ?? b.qty ?? 0), 0);
   const nothing = !events.length && !wines.length && !bottles.length && !merchants.length;
 
-  const head = `<div class="masthead">
+  const head = `<header class="masthead"><div class="mast-text">
       <h2 class="mast-date">${esc(new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' }))}</h2>
       <p class="descriptor">${nothing ? 'A fresh book. Every glass, bottle and shop you add shows up here.'
         : esc([tasted.filter((w) => inYear(dateOf(w))).length ? `${plural(tasted.filter((w) => inYear(dateOf(w))).length, 'wine')} tasted in ${y}` : `No tastings yet in ${y}`, bottleCount ? `${plural(bottleCount, 'bottle')} in the cellar` : ''].filter(Boolean).join(', ')) + '.'}</p>
-    </div>`;
+    </div>${homePlate()}</header>`;
 
   if (nothing) {
     return shell(`${head}
@@ -381,8 +382,7 @@ async function viewHome() {
   const taste = colN ? `<section class="home-sec" aria-labelledby="h-taste">
       <h2 class="sec-h" id="h-taste">What you taste</h2>
       <div class="card taste">
-        <div class="split" role="img" aria-label="${attr(['white', 'rose', 'red'].map((c) => `${col[c]} ${COLOUR_LABEL[c]}`).join(', '))}">${['white', 'rose', 'red'].filter((c) => col[c]).map((c) => `<i class="sw-${c}" style="flex:${col[c]}"></i>`).join('')}</div>
-        <div class="split-key">${['white', 'rose', 'red'].map((c) => `<span><span class="dot dot-${c}"></span>${COLOUR_LABEL[c]} <b>${col[c]}</b></span>`).join('')}</div>
+        <ul class="glasses" aria-label="${attr(['white', 'rose', 'red'].map((c) => `${col[c]} ${COLOUR_LABEL[c]}`).join(', '))}">${['white', 'rose', 'red'].map((c) => `<li>${tasteGlass(c, col[c] / colN)}<span class="glass-n">${col[c]}</span><span class="glass-k">${COLOUR_LABEL[c]}</span></li>`).join('')}</ul>
         ${grapes.length || countries.length ? `<dl class="facts taste-facts">
           ${grapes.length ? `<dt>Grapes</dt><dd>${grapes.map(([k, n]) => `${esc(k)} <span class="muted">${n}</span>`).join(' · ')}</dd>` : ''}
           ${countries.length ? `<dt>Countries</dt><dd>${countries.map(([k, n]) => `${esc(k)} <span class="muted">${n}</span>`).join(' · ')}</dd>` : ''}
@@ -395,11 +395,13 @@ async function viewHome() {
       <div class="home-col">${needs}</div>
       <div class="home-col">${instruments}</div>
     </div>
+    ${fleuron()}
     ${register}
     <div class="home-grid">
       <div class="home-col">${timeline}</div>
       <div class="home-col">${top}${taste}</div>
     </div>
+    ${fleuron()}
     ${homeFooter(mediaIds.length)}
     <a class="fab" href="#/new">+ New tasting</a>
   `, { title: 'Home', tab: 'home' });

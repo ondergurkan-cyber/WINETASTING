@@ -900,3 +900,59 @@ h1:focus { outline: none; }
 .btn.danger[data-act="deleteWine"] { margin-top: 24px; }
 /* the smallest phones (320 pt): plain 11px caps with no tracking so all five tab names fit */
 @media (max-width: 359px) { .tabbar { padding-left: 0; padding-right: 0; } .tabbar a { font-size: 11px; letter-spacing: 0; } }
+
+/* =====================================================================
+   Home imagery, 2026-11-13: an engraved frontispiece, printer's ornaments
+   and engraved glasses. All line art is original and drawn in currentColor.
+   ===================================================================== */
+.masthead { --plate-paper: var(--bg); }
+.plate { margin: 18px 0 0; }
+.plate-frame {
+  position: relative; overflow: hidden; aspect-ratio: 400 / 170; border-radius: var(--r-sm);
+  color: var(--ink); background: var(--plate-paper);
+  border: 1px solid var(--edge);
+}
+.plate-frame::after { content: ""; position: absolute; inset: 3px; border: 1px solid var(--line); border-radius: var(--r-xs); pointer-events: none; }
+@media (max-width: 699px) { .plate-frame { aspect-ratio: 400 / 150; } }
+.plate-art { display: block; width: 100%; height: 100%; }
+.plate-art .pl-fill, .plate-art .pl-grapes circle { fill: var(--plate-paper); }
+.plate-art .pl-sun { color: var(--copper); }
+.plate-art .pl-stars { color: var(--copper); }
+.plate-art .pl-sky { color: var(--muted); }
+.plate .pl-night { display: none; }
+.plate.night .pl-day { display: none; }
+.plate.night .pl-night { display: inline; }
+.plate figcaption { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin: 8px 2px 0; }
+.plate-cap { font-family: var(--f-italic); font-style: italic; font-size: 1rem; color: var(--muted); }
+.plate .dateline { white-space: nowrap; }
+/* the one authored moment: the sun (or moon) settles into place when Home first opens */
+.plate-art .pl-sun { animation: pl-rise 1.6s cubic-bezier(.16, 1, .3, 1) both; }
+@keyframes pl-rise { from { transform: translateY(7px); } to { transform: none; } }
+@media (prefers-reduced-motion: reduce) { .plate-art .pl-sun { animation: none; } }
+
+/* printer's ornament between bands */
+.fleuron { display: flex; justify-content: center; margin: 32px 0 -4px; color: var(--edge); line-height: 0; }
+.fleuron .fl-leaf { fill: var(--sunk); color: var(--copper); }
+
+/* what you taste: three engraved glasses, filled to their share */
+.glasses { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, 1fr); text-align: center; }
+.glasses li { display: flex; flex-direction: column; align-items: center; color: var(--ink); }
+.taste-glass { display: block; width: 52px; height: auto; color: var(--ink); }
+.taste-glass .tg-wine { opacity: .9; }
+.glass-n { font-family: var(--f-display); font-size: 1.75rem; line-height: 1; margin-top: 4px; font-variant-numeric: lining-nums tabular-nums; }
+.glass-k { font-family: var(--f-label); font-weight: 600; font-size: 0.75rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); margin-top: 4px; }
+
+@media (min-width: 700px) {
+  .masthead { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); column-gap: 32px; align-items: end; }
+  .plate { margin-top: 0; }
+}
+@media (prefers-color-scheme: dark) {
+  .plate .pl-day { display: none; }
+  .plate .pl-night { display: inline; }
+  .plate-frame { color: var(--muted); }
+  .plate-art .pl-sky { opacity: .55; }
+  .taste-glass .tg-wine.sw-red { fill: var(--red-wine); }
+}
+.taste-glass .tg-wine.sw-white { fill: var(--white-wine); }
+.taste-glass .tg-wine.sw-rose { fill: var(--rose-wine); }
+.taste-glass .tg-wine.sw-red { fill: var(--red-wine); }
