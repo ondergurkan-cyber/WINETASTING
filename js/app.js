@@ -2045,7 +2045,21 @@ async function boot() {
   await route();
   requestPersistence();
   if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
-    try { navigator.serviceWorker.register('sw.js'); } catch (e) { /* not available in this context */ }
+    try {
+      const hadController = !!navigator.serviceWorker.controller;
+      const reg = await navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' });
+      // Look for a new version whenever the app comes back to the front (iOS keeps it suspended).
+      document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') reg.update().catch(() => {}); });
+      // A new version took over: reload to use it, but never in the middle of typing or a form.
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (!hadController || reloadPending) return;
+        reloadPending = true;
+        const busy = () => (document.activeElement && /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)) || /\/(new|edit|add)(\/|$)/.test(location.hash) || document.querySelector('.modal');
+        const reload = async () => { await flushWine(); location.reload(); };
+        if (!busy()) reload(); else window.addEventListener('hashchange', () => { if (!busy()) reload(); });
+      });
+    } catch (e) { /* not available in this context */ }
   }
 }
+let reloadPending = false;
 boot();
