@@ -100,11 +100,10 @@ function bandFor(quality, scale) {
 function shell(content, { title, back, tab, actions = '' } = {}) {
   const tabs = tab ? `
     <nav class="tabbar" aria-label="Main">
-      <a href="#/" class="${tab === 'home' ? 'on' : ''}"${tab === 'home' ? ' aria-current="page"' : ''}><span class="ti">${icon('home')}</span>Home</a>
-      <a href="#/events" class="${tab === 'tasting' ? 'on' : ''}"${tab === 'tasting' ? ' aria-current="page"' : ''}><span class="ti">${icon('glass')}</span>Tasting</a>
-      <a href="#/cellar" class="${tab === 'cellar' ? 'on' : ''}"${tab === 'cellar' ? ' aria-current="page"' : ''}><span class="ti">${icon('bottle')}</span>Cellar</a>
-      <a href="#/merchants" class="${tab === 'merchants' ? 'on' : ''}"${tab === 'merchants' ? ' aria-current="page"' : ''}><span class="ti">${icon('shop')}</span>Merchants</a>
-      <a href="#/standings" class="${tab === 'standings' ? 'on' : ''}"${tab === 'standings' ? ' aria-current="page"' : ''}><span class="ti">${icon('laurel')}</span>Standings</a>
+      <a href="#/" class="${tab === 'home' ? 'on' : ''}"${tab === 'home' ? ' aria-current="page"' : ''}><span class="ti">${icon('home')}</span><span class="tl">Home</span></a>
+      <a href="#/events" class="${tab === 'tasting' ? 'on' : ''}"${tab === 'tasting' ? ' aria-current="page"' : ''}><span class="ti">${icon('glass')}</span><span class="tl">Tasting</span></a>
+      <a href="#/cellar" class="${tab === 'cellar' ? 'on' : ''}"${tab === 'cellar' ? ' aria-current="page"' : ''}><span class="ti">${icon('bottle')}</span><span class="tl">Cellar</span></a>
+      <a href="#/standings" class="${tab === 'standings' ? 'on' : ''}"${tab === 'standings' ? ' aria-current="page"' : ''}><span class="ti">${icon('laurel')}</span><span class="tl">Standings</span></a>
     </nav>` : '';
   return `
     <header class="topbar">
@@ -1082,6 +1081,11 @@ function windowStatus(b) {
   return { k: '', label: '' };
 }
 
+// Cellar holds two books: the bottles and the merchants they came from
+function cellarSwitch(on) {
+  return `<nav class="seg cellar-switch" aria-label="Cellar">${[['bottles', '#/cellar', 'Bottles'], ['merchants', '#/merchants', 'Merchants']].map(([k, h, l]) => `<a href="${h}" class="${on === k ? 'on' : ''}"${on === k ? ' aria-current="page"' : ''}>${l}</a>`).join('')}</nav>`;
+}
+
 async function viewCellar() {
   const bottles = await db.all('bottles');
   const f = ui.cellarFilter;
@@ -1105,6 +1109,7 @@ async function viewCellar() {
   const empty = f === 'in' ? `<div class="empty"><div class="empty-icon">${engraving('bottle')}</div><p><b>Your cellar is empty.</b></p><p class="muted">Add bottles with a label photo. Track how many you have, where they are, what you paid and when to drink them.</p></div>`
     : `<p class="muted center">${f === 'soon' ? 'Nothing needs drinking soon.' : 'No finished bottles yet.'}</p>`;
   return shell(`
+    ${cellarSwitch('bottles')}
     <div class="stats"><div><b>${count}</b><span>bottles</span></div><div><b>${inCellar.length}</b><span>wines</span></div><div><b>${esc(money(value) || '–')}</b><span>value</span></div></div>
     <div class="seg seg-tabs">${[['in', 'In cellar'], ['soon', `Drink soon${soon.length ? ` (${soon.length})` : ''}`], ['gone', 'Finished']].map(([k, l]) => `<button data-act="cellarFilter" data-v="${k}" class="${f === k ? 'on' : ''}">${l}</button>`).join('')}</div>
     ${list.length ? cards : empty}
@@ -1220,7 +1225,7 @@ async function viewMerchants() {
       </a>`;
   }).join('');
   const empty = `<div class="empty"><div class="empty-icon">${engraving('shop')}</div><p><b>No merchants yet.</b></p><p class="muted">Keep the shops, importers and producers you buy from: contacts, what you bought there and what you paid.</p></div>`;
-  return shell(`${ms.length ? cards : empty}<a class="fab" href="#/merchant/new">+ New merchant</a>`, { title: 'Merchants', tab: 'merchants' });
+  return shell(`${cellarSwitch('merchants')}${ms.length ? cards : empty}<a class="fab" href="#/merchant/new">+ New merchant</a>`, { title: 'Cellar', tab: 'cellar' });
 }
 
 async function viewMerchantForm(id) {
