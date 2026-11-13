@@ -4,7 +4,7 @@ import { generateNote, wineTitle, formatScore } from './note.js';
 import { guess, explain } from './guess.js';
 import { scanLabel, testKey } from './scan.js';
 import { icon, engraving } from './icons.js';
-import { homePlate, fleuron, tasteGlass } from './plate.js';
+import { homeHero, fleuron, tasteGlass } from './plate.js';
 import * as sync from './sync.js';
 
 // ---------------------------------------------------------------- helpers
@@ -234,11 +234,10 @@ async function viewHome() {
   const boughtYear = bottles.filter((b) => inYear(b.purchaseDate)).reduce((n, b) => n + (b.bought ?? b.qty ?? 0), 0);
   const nothing = !events.length && !wines.length && !bottles.length && !merchants.length;
 
-  const head = `<header class="masthead"><div class="mast-text">
+  const head = homeHero(`
       <h2 class="mast-date">${esc(new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' }))}</h2>
       <p class="descriptor">${nothing ? 'A fresh book. Every glass, bottle and shop you add shows up here.'
-        : esc([tasted.filter((w) => inYear(dateOf(w))).length ? `${plural(tasted.filter((w) => inYear(dateOf(w))).length, 'wine')} tasted in ${y}` : `No tastings yet in ${y}`, bottleCount ? `${plural(bottleCount, 'bottle')} in the cellar` : ''].filter(Boolean).join(', ')) + '.'}</p>
-    </div>${homePlate()}</header>`;
+        : esc([tasted.filter((w) => inYear(dateOf(w))).length ? `${plural(tasted.filter((w) => inYear(dateOf(w))).length, 'wine')} tasted in ${y}` : `No tastings yet in ${y}`, bottleCount ? `${plural(bottleCount, 'bottle')} in the cellar` : ''].filter(Boolean).join(', ')) + '.'}</p>`);
 
   if (nothing) {
     return shell(`${head}
