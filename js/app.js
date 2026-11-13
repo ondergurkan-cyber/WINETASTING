@@ -3,6 +3,7 @@ import { METHODS, getMethod, getLevel, fieldsFor } from './methods/index.js';
 import { generateNote, wineTitle, formatScore } from './note.js';
 import { guess, explain } from './guess.js';
 import { scanLabel, testKey } from './scan.js';
+import { icon, engraving } from './icons.js';
 
 // ---------------------------------------------------------------- helpers
 const $app = document.getElementById('app');
@@ -97,15 +98,15 @@ function bandFor(quality, scale) {
 function shell(content, { title, back, tab, actions = '' } = {}) {
   const tabs = tab ? `
     <nav class="tabbar">
-      <a href="#/" class="${tab === 'tasting' ? 'on' : ''}"><span class="ti">🍷</span>Tasting</a>
-      <a href="#/cellar" class="${tab === 'cellar' ? 'on' : ''}"><span class="ti">🍾</span>Cellar</a>
-      <a href="#/merchants" class="${tab === 'merchants' ? 'on' : ''}"><span class="ti">🏪</span>Merchants</a>
-      <a href="#/standings" class="${tab === 'standings' ? 'on' : ''}"><span class="ti">🏆</span>Standings</a>
-      <a href="#/settings" class="${tab === 'settings' ? 'on' : ''}"><span class="ti">⚙︎</span>Settings</a>
+      <a href="#/" class="${tab === 'tasting' ? 'on' : ''}"><span class="ti">${icon('glass')}</span>Tasting</a>
+      <a href="#/cellar" class="${tab === 'cellar' ? 'on' : ''}"><span class="ti">${icon('bottle')}</span>Cellar</a>
+      <a href="#/merchants" class="${tab === 'merchants' ? 'on' : ''}"><span class="ti">${icon('shop')}</span>Merchants</a>
+      <a href="#/standings" class="${tab === 'standings' ? 'on' : ''}"><span class="ti">${icon('laurel')}</span>Standings</a>
+      <a href="#/settings" class="${tab === 'settings' ? 'on' : ''}"><span class="ti">${icon('gear')}</span>Settings</a>
     </nav>` : '';
   return `
     <header class="topbar">
-      ${back ? `<a class="back" href="${back}" aria-label="Back">‹</a>` : '<span class="back-spacer"></span>'}
+      ${back ? `<a class="back" href="${back}" aria-label="Back">${icon('back', 22)}</a>` : '<span class="back-spacer"></span>'}
       <h1>${esc(title || 'Tasting')}</h1>
       <div class="top-actions">${actions}</div>
     </header>
@@ -136,7 +137,7 @@ async function viewEvents() {
   }).join('');
   const empty = `
     <div class="empty">
-      <div class="empty-icon">🍷</div>
+      <div class="empty-icon">${engraving('glass')}</div>
       <p><b>No tastings yet.</b></p>
       <p class="muted">Create an event, add the wines, and taste them with the ${esc(getMethod(settings.method).name)} ${esc(level.name)}.</p>
     </div>`;
@@ -159,9 +160,9 @@ function homeTabs(on) {
 function viewNewTasting() {
   return shell(`
     <p class="muted">What are you tasting?</p>
-    <a class="card choice" href="#/event/new"><span class="choice-icon">🥂</span><span><b>Event</b><br><span class="muted small">A tasting with several wines: name, date, place, standings, optional blind mode.</span></span></a>
-    <a class="card choice" href="#/single/new"><span class="choice-icon">🍷</span><span><b>Single wine</b><br><span class="muted small">A glass at a restaurant, a dinner, a bottle at home. Saved in My Wines with its date and place.</span></span></a>
-    <a class="card choice" href="#/cellar"><span class="choice-icon">🍾</span><span><b>Open a bottle from my cellar</b><br><span class="muted small">Pick a bottle; it is taken out of the cellar and the tasting starts.</span></span></a>
+    <a class="card choice" href="#/event/new"><span class="choice-icon">${icon('glasses', 28)}</span><span><b>Event</b><br><span class="muted small">A tasting with several wines: name, date, place, standings, optional blind mode.</span></span></a>
+    <a class="card choice" href="#/single/new"><span class="choice-icon">${icon('glass', 28)}</span><span><b>Single wine</b><br><span class="muted small">A glass at a restaurant, a dinner, a bottle at home. Saved in My Wines with its date and place.</span></span></a>
+    <a class="card choice" href="#/cellar"><span class="choice-icon">${icon('bottle', 28)}</span><span><b>Open a bottle from my cellar</b><br><span class="muted small">Pick a bottle; it is taken out of the cellar and the tasting starts.</span></span></a>
   `, { title: 'New tasting', back: '#/' });
 }
 
@@ -181,7 +182,7 @@ async function viewMyWines() {
     ${ws.map((w) => {
       const t = w.tasting;
       return `<a class="card wine-card wc-link" href="#/wine/${w.id}">
-          ${w.labelId ? `<img class="thumb" data-media="${w.labelId}" alt="">` : '<div class="thumb ph">🍷</div>'}
+          ${w.labelId ? `<img class="thumb" data-media="${w.labelId}" alt="">` : `<div class="thumb ph">${icon('glass', 22)}</div>`}
           <span class="wc-main">
             <span class="wc-name">${esc(wineTitle(w))}</span>
             <span class="muted small"><span class="dot dot-${w.colour || 'none'}"></span>${esc([w.place, fmtDate(w.date)].filter(Boolean).join(' · '))}${t && t.done ? '' : ' · tasting'}</span>
@@ -189,7 +190,7 @@ async function viewMyWines() {
           <span class="wc-score">${t && t.score != null && t.score !== '' ? esc(formatScore(t.score, w.scale || 100)) : ''}</span>
         </a>`;
     }).join('')}`).join('');
-  const empty = `<div class="empty"><div class="empty-icon">🍷</div><p><b>No single wines yet.</b></p><p class="muted">Tasting a glass at a restaurant or a bottle at home? Tap <b>+ New tasting</b> and pick <b>Single wine</b>. Its place works as a reminder of where you had it.</p></div>`;
+  const empty = `<div class="empty"><div class="empty-icon">${engraving('glass')}</div><p><b>No single wines yet.</b></p><p class="muted">Tasting a glass at a restaurant or a bottle at home? Tap <b>+ New tasting</b> and pick <b>Single wine</b>. Its place works as a reminder of where you had it.</p></div>`;
   return shell(`${homeTabs('mywines')}${wines.length ? body : empty}<a class="fab" href="#/single/new">+ Single wine</a>`, { title: 'Tasting', tab: 'tasting' });
 }
 
@@ -237,13 +238,12 @@ function standingsList(rows, scaleOf) {
   const unscored = rows.filter((r) => !scored.includes(r));
   scored.sort((a, b) => scoreToHundred(+b.wine.tasting.score, scaleOf(b)) - scoreToHundred(+a.wine.tasting.score, scaleOf(a)));
   let rank = 0, last = null;
-  const medals = ['🥇', '🥈', '🥉'];
-  const li = scored.map((r, i) => {
+    const li = scored.map((r, i) => {
     const s = scoreToHundred(+r.wine.tasting.score, scaleOf(r));
     if (s !== last) { rank = i + 1; last = s; }
     return `
       <a class="card st-row" href="#/wine/${r.wine.id}">
-        <span class="rank">${rank <= 3 ? medals[rank - 1] : rank}</span>
+        <span class="rank ${rank <= 3 ? 'top top' + rank : ''}">${rank}</span>
         <span class="dot dot-${r.wine.colour || 'none'}"></span>
         <span class="st-name">${esc(r.name)}${r.sub ? `<br><span class="muted small">${esc(r.sub)}</span>` : ''}</span>
         <span class="st-score">${esc(formatScore(r.wine.tasting.score, scaleOf(r)))}</span>
@@ -272,7 +272,7 @@ async function viewEvent(id) {
     body = hero + wines.map((w, i) => {
       const t = w.tasting;
       const status = !t ? 'not started' : (t.done ? 'done ✓' : 'tasting');
-      const thumb = !event.blind || w.revealed ? (w.labelId ? `<img class="thumb" data-media="${w.labelId}" alt="">` : '<div class="thumb ph">🍾</div>') : `<div class="thumb ph blind">${i + 1}</div>`;
+      const thumb = !event.blind || w.revealed ? (w.labelId ? `<img class="thumb" data-media="${w.labelId}" alt="">` : `<div class="thumb ph">${icon('bottle', 22)}</div>`) : `<div class="thumb ph blind">${i + 1}</div>`;
       return `
         <div class="card wine-card">
           <a class="wc-link" href="#/wine/${w.id}">
@@ -284,9 +284,9 @@ async function viewEvent(id) {
             </span>
             <span class="wc-score">${t && t.score != null && t.score !== '' ? esc(formatScore(t.score, event.scale)) : ''}</span>
           </a>
-          ${ui.editList === id ? `<button class="row-del" data-act="deleteWine" data-id="${w.id}" aria-label="Delete wine ${i + 1}">🗑</button>` : `<span class="reorder">
-            <button data-act="moveWine" data-id="${w.id}" data-dir="-1" ${i === 0 ? 'disabled' : ''} aria-label="Move up">▲</button>
-            <button data-act="moveWine" data-id="${w.id}" data-dir="1" ${i === wines.length - 1 ? 'disabled' : ''} aria-label="Move down">▼</button>
+          ${ui.editList === id ? `<button class="row-del" data-act="deleteWine" data-id="${w.id}" aria-label="Delete wine ${i + 1}">${icon('trash', 20)}</button>` : `<span class="reorder">
+            <button data-act="moveWine" data-id="${w.id}" data-dir="-1" ${i === 0 ? 'disabled' : ''} aria-label="Move up">${icon('up', 16)}</button>
+            <button data-act="moveWine" data-id="${w.id}" data-dir="1" ${i === wines.length - 1 ? 'disabled' : ''} aria-label="Move down">${icon('down', 16)}</button>
           </span>`}
         </div>`;
     }).join('') || `<div class="empty"><p><b>No wines yet.</b></p><p class="muted">Tap a style below to add wine 1. Add them in the order you'll taste them.</p></div>`;
@@ -305,7 +305,7 @@ async function viewEvent(id) {
         ${media.map((m) => m.kind === 'video'
           ? `<div class="g-item"><video data-media="${m.id}" controls playsinline></video><button class="g-del" data-act="delMedia" data-id="${m.id}">✕</button></div>`
           : `<div class="g-item"><img data-media="${m.id}" alt=""><button class="g-del" data-act="delMedia" data-id="${m.id}">✕</button></div>`).join('')}
-        <label class="g-add">＋<br><span class="small">Add</span><input type="file" accept="image/*,video/*" multiple hidden data-upload="event:${id}"></label>
+        <label class="g-add">${icon('plus', 26)}<span class="small">Add</span><input type="file" accept="image/*,video/*" multiple hidden data-upload="event:${id}"></label>
       </div>`;
   }
   const meta = [fmtDate(event.date), event.place, `${event.scale} pts`, event.blind ? 'blind' : null].filter(Boolean).map(esc).join(' · ');
@@ -315,7 +315,7 @@ async function viewEvent(id) {
       ${['wines', 'standings', 'notes'].map((t) => `<button data-act="eventTab" data-tab="${t}" class="${tab === t ? 'on' : ''}">${{ wines: 'Wines', standings: 'Standings', notes: 'Notes & media' }[t]}</button>`).join('')}
     </div>
     ${body}
-  `, { title: event.name, back: '#/', actions: `<a class="icon-btn" href="#/event/${id}/edit" aria-label="Edit event">✎</a>` });
+  `, { title: event.name, back: '#/', actions: `<a class="icon-btn" href="#/event/${id}/edit" aria-label="Edit event">${icon('pencil', 20)}</a>` });
 }
 
 function wineDetailFields(w, { price = true } = {}) {
@@ -342,10 +342,10 @@ function labelBlock(obj, label, kind, hide) {
   if (label) {
     if (st && st.busy) scan = '<p class="scan-status"><span class="spin"></span> Reading the label…</p>';
     else if (!apiKey) scan = `<p class="muted small">AI label reading is off. <a href="#/settings">Add your API key in Settings</a> to fill these details from the photo.</p>`;
-    else scan = `<button class="btn" type="button" data-act="scanLabel" data-kind="${kind}">✨ ${st && st.done ? 'Read the label again' : 'Read label with AI'}</button>${st && st.error ? `<p class="note-box">${esc(st.error)}</p>` : ''}${st && st.done ? `<p class="muted small">${hide ? 'Label read. Details stay hidden until you reveal the wine.' : 'Filled from the label. Fields marked <b>check</b> are uncertain, so look them over.'}</p>` : ''}`;
+    else scan = `<button class="btn" type="button" data-act="scanLabel" data-kind="${kind}">${icon('quill', 18)} ${st && st.done ? 'Read the label again' : 'Read label with AI'}</button>${st && st.error ? `<p class="note-box">${esc(st.error)}</p>` : ''}${st && st.done ? `<p class="muted small">${hide ? 'Label read. Details stay hidden until you reveal the wine.' : 'Filled from the label. Fields marked <b>check</b> are uncertain, so look them over.'}</p>` : ''}`;
   }
   return `<div class="label-shot">
-      ${label ? `<img src="${mediaURL(label)}" alt="Label" class="${hide ? 'blurred' : ''}">` : '<div class="label-ph">📷<br>Label photo</div>'}
+      ${label ? `<img src="${mediaURL(label)}" alt="Label" class="${hide ? 'blurred' : ''}">` : `<div class="label-ph">${icon('camera', 30)}<br>Label photo</div>`}
       <label class="btn">${label ? 'Retake' : 'Take label photo'}<input type="file" accept="image/*" capture="environment" hidden data-upload="${kind === 'bottle' ? 'blabel' : 'label'}"></label>
       ${label ? `<button class="btn danger" type="button" data-act="delLabel" data-kind="${kind}">Remove photo</button>` : ''}
       ${scan}
@@ -394,7 +394,7 @@ async function viewSingleForm(wineId) {
       </div>
       <label>Where<input name="place" value="${attr(w.place)}" placeholder="Restaurant, city, a friend's home…"></label>
       <div class="loc-row">
-        <button class="btn" type="button" data-act="useLocation">📍 ${w.lat ? 'Update my location' : 'Save my location'}</button>
+        <button class="btn" type="button" data-act="useLocation">${icon('pin', 18)} ${w.lat ? 'Update my location' : 'Save my location'}</button>
         ${w.lat ? `<a class="btn" href="${mapURL(w)}" target="_blank" rel="noopener">Open map</a>` : ''}
       </div>
       ${w.lat ? '<p class="muted small">Location saved, so you can find the place again.</p>' : ''}
@@ -505,7 +505,7 @@ function segRow(f, t, opts) {
   const cols = opts.length > 6 ? 3 : opts.length;
   return `<div class="srow" data-field="${f.id}" data-empty="${val ? 0 : 1}">
       <div class="srow-label">${esc(f.label)}</div>
-      <div class="seg-bar" style="grid-template-columns: repeat(${cols}, minmax(0, 1fr))">${opts.map((o) => `<button class="${val === o ? 'on' : ''}" data-act="pick" data-f="${f.id}" data-v="${attr(o)}" aria-label="${attr(o)}">${esc(short(o))}</button>`).join('')}</div>
+      <div class="seg-bar ${f.scale && opts.length <= 6 ? 'scale' : 'pills'}" style="grid-template-columns: repeat(${cols}, minmax(0, 1fr))">${opts.map((o) => `<button class="${val === o ? 'on' : ''}" data-act="pick" data-f="${f.id}" data-v="${attr(o)}" aria-label="${attr(o)}">${esc(short(o))}</button>`).join('')}</div>
     </div>`;
 }
 
@@ -672,14 +672,17 @@ function verdictBody(fields, t, w, level, event) {
     const sugg = quality.blic && n ? ['poor', 'acceptable', 'good', 'very good', 'outstanding'][n] : null;
     const val = t.values.quality;
     out += `<div class="srow" data-field="quality" data-empty="${val ? 0 : 1}"><div class="srow-label">${esc(quality.label)}${sugg ? ` <span class="muted small">· BLIC suggests ${sugg}</span>` : ''}</div>
-      <div class="seg-bar" style="grid-template-columns: repeat(3, minmax(0, 1fr))">${quality.options.map((o) => `<button class="${val === o ? 'on' : ''} ${sugg === o && val !== o ? 'sugg' : ''}" data-act="pick" data-f="quality" data-v="${attr(o)}">${esc(o)}</button>`).join('')}</div></div>`;
+      <div class="seg-bar pills" style="grid-template-columns: repeat(3, minmax(0, 1fr))">${quality.options.map((o) => `<button class="${val === o ? 'on' : ''} ${sugg === o && val !== o ? 'sugg' : ''}" data-act="pick" data-f="quality" data-v="${attr(o)}">${esc(o)}</button>`).join('')}</div></div>`;
   }
   const band = bandFor(t.values.quality, scale);
   const min = scale === 20 ? 0 : 50, max = scale === 20 ? 20 : 100, stepv = scale === 20 ? 0.5 : 1;
   const has = t.score != null && t.score !== '';
   out += `<div class="srow" data-field="score" data-empty="${has ? 0 : 1}">
-      <div class="score-line"><span class="srow-label">Score${band ? ` <span class="muted small">· ${esc(t.values.quality)} = ${band[0]}–${band[1]}</span>` : ''}</span>
-        <span class="score-big"><input type="number" inputmode="decimal" min="${min}" max="${max}" step="${stepv}" value="${attr(has ? t.score : '')}" data-score placeholder="–" aria-label="Score"><span>/${scale}</span></span></div>
+      <div class="srow-label">Score${band ? ` <span class="muted small">· ${esc(t.values.quality)} = ${band[0]}–${band[1]}</span>` : ''}</div>
+      <div class="dial" data-dial data-min="${min}" data-max="${max}" style="--p:${has ? Math.max(0, Math.min(1, (t.score - min) / (max - min))).toFixed(3) : 0}">
+        <div class="dial-face"><span class="dial-label">Points</span><input type="number" inputmode="decimal" min="${min}" max="${max}" step="${stepv}" value="${attr(has ? t.score : '')}" data-score placeholder="–" aria-label="Score"><span class="dial-unit">of ${scale}</span></div>
+      </div>
+      ${t.values.quality ? `<p class="descriptor center">${esc(t.values.quality.charAt(0).toUpperCase() + t.values.quality.slice(1))}</p>` : ''}
       <input type="range" class="score-range" min="${min}" max="${max}" step="${stepv}" value="${attr(has ? t.score : (band ? band[0] : (scale === 20 ? 16 : 88)))}" data-score-range aria-label="Score slider">
     </div>`;
   for (const f of fields.filter((x) => x.id !== 'quality')) out += renderSheetField(f, t, w, level);
@@ -704,11 +707,11 @@ async function viewWine(id) {
   const extras = await wrapExtras(w, t, level, event, idx, wines);
   const sub = `${method.name} · ${level.name}${advOf(t) ? ' · Advanced' : ''} · ${styleLabel(w)}${event.blind && !w.revealed ? ' · blind' : ''}`;
   const where = event.single
-    ? `<div class="wine-sub small">${[w.place ? (w.lat ? `<a href="${mapURL(w)}" target="_blank" rel="noopener">📍 ${esc(w.place)}</a>` : `📍 ${esc(w.place)}`) : (w.lat ? `<a href="${mapURL(w)}" target="_blank" rel="noopener">📍 map</a>` : ''), esc(fmtDate(w.date)), w.bottleId ? `<a href="#/bottle/${w.bottleId}">from my cellar</a>` : ''].filter(Boolean).join(' · ')}</div>` : '';
+    ? `<div class="wine-sub small">${[w.place ? (w.lat ? `<a href="${mapURL(w)}" target="_blank" rel="noopener">${icon('pin', 14)} ${esc(w.place)}</a>` : `${icon('pin', 14)} ${esc(w.place)}`) : (w.lat ? `<a href="${mapURL(w)}" target="_blank" rel="noopener">${icon('pin', 14)} map</a>` : ''), esc(fmtDate(w.date)), w.bottleId ? `<a href="#/bottle/${w.bottleId}">from my cellar</a>` : ''].filter(Boolean).join(' · ')}</div>` : '';
   const modeToggle = `<div class="mode-toggle" role="group" aria-label="Mode">
       <button class="${t.mode === 'quick' ? 'on' : ''}" data-act="mode" data-v="quick">Quick</button>
       <button class="${t.mode !== 'quick' ? 'on' : ''}" data-act="mode" data-v="full">Full SAT</button></div>
-      <button class="setup-btn ${ui.setupOpen === w.id ? 'on' : ''}" data-act="setupToggle" aria-label="Tasting setup">⚙︎</button>`;
+      <button class="setup-btn ${ui.setupOpen === w.id ? 'on' : ''}" data-act="setupToggle" aria-label="Tasting setup">${icon('gear', 20)}</button>`;
   const setup = ui.setupOpen === w.id ? `
     <div class="panel setup-panel">
       <div class="srow-label">Tasting setup <span class="muted small">· this wine</span></div>
@@ -723,7 +726,7 @@ async function viewWine(id) {
       <p class="muted tiny">Taps you already made are kept. Changing level only changes which lines you see.</p>
     </div>` : '';
   return shell(`<div class="sheet-head"><div class="wine-sub muted small">${esc(sub)}${event.single ? '' : ` · wine ${idx + 1} of ${wines.length}`}</div>${modeToggle}</div>${setup}${where}${strip}<div class="sheet">${sections}${extras}</div>`,
-    { title: displayName(w, event, idx), back: backFor(w), actions: (!event.blind || w.revealed) ? `<a class="icon-btn" href="${editFor(w)}" aria-label="Wine details">✎</a>` : '' });
+    { title: displayName(w, event, idx), back: backFor(w), actions: (!event.blind || w.revealed) ? `<a class="icon-btn" href="${editFor(w)}" aria-label="Wine details">${icon('pencil', 20)}</a>` : '' });
 }
 
 // Guess, note, photos, reveal and the save buttons, below the Verdict.
@@ -759,7 +762,7 @@ async function wrapExtras(w, t, level, event, idx, wines) {
       <div class="field-label">Photos</div>
       <div class="gallery">
         ${photos.map((m) => `<div class="g-item"><img src="${mediaURL(m)}" alt=""><button class="g-del" data-act="delMedia" data-id="${m.id}" aria-label="Delete photo">✕</button></div>`).join('')}
-        <label class="g-add">📷<br><span class="small">Add</span><input type="file" accept="image/*" multiple hidden data-upload="wine:${w.id}"></label>
+        <label class="g-add">${icon('camera', 26)}<span class="small">Add</span><input type="file" accept="image/*" multiple hidden data-upload="wine:${w.id}"></label>
       </div>
     </div>` : '';
 
@@ -771,7 +774,7 @@ async function wrapExtras(w, t, level, event, idx, wines) {
         <div class="muted small">${esc([w.grapes, w.region, w.country].filter(Boolean).join(' · '))}</div>
         <a class="link" href="#/event/${w.eventId}/wine/${w.id}/edit">Fill in or fix details</a>
         <div class="field-label">How was my guess?</div>
-        <div class="seg-bar" style="grid-template-columns: repeat(3, minmax(0, 1fr))">${['right', 'close', 'wrong'].map((r) => `<button class="${t.guessResult === r ? 'on' : ''}" data-act="guessResult" data-v="${r}">${r}</button>`).join('')}</div>
+        <div class="seg-bar pills" style="grid-template-columns: repeat(3, minmax(0, 1fr))">${['right', 'close', 'wrong'].map((r) => `<button class="${t.guessResult === r ? 'on' : ''}" data-act="guessResult" data-v="${r}">${r}</button>`).join('')}</div>
       </div>` : `<button class="btn reveal-btn" data-act="reveal">Reveal the wine</button>`) : '';
 
   const next = wines.slice(idx + 1).find((x) => !(x.tasting && x.tasting.done)) || wines[idx + 1];
@@ -842,7 +845,7 @@ async function viewCellar() {
   const cards = list.map((b) => {
     const ws = windowStatus(b);
     return `<a class="card wine-card wc-link" href="#/bottle/${b.id}">
-        ${b.labelId ? `<img class="thumb" data-media="${b.labelId}" alt="">` : '<div class="thumb ph">🍾</div>'}
+        ${b.labelId ? `<img class="thumb" data-media="${b.labelId}" alt="">` : `<div class="thumb ph">${icon('bottle', 22)}</div>`}
         <span class="wc-main">
           <span class="wc-name">${esc(wineTitle(b))}</span>
           <span class="muted small"><span class="dot dot-${b.colour || 'none'}"></span>${esc([b.location, ws.label].filter(Boolean).join(' · ') || styleLabel(b))}</span>
@@ -850,7 +853,7 @@ async function viewCellar() {
         <span class="qty ${ws.k}">×${b.qty || 0}</span>
       </a>`;
   }).join('');
-  const empty = f === 'in' ? `<div class="empty"><div class="empty-icon">🍾</div><p><b>Your cellar is empty.</b></p><p class="muted">Add bottles with a label photo. Track how many you have, where they are, what you paid and when to drink them.</p></div>`
+  const empty = f === 'in' ? `<div class="empty"><div class="empty-icon">${engraving('bottle')}</div><p><b>Your cellar is empty.</b></p><p class="muted">Add bottles with a label photo. Track how many you have, where they are, what you paid and when to drink them.</p></div>`
     : `<p class="muted center">${f === 'soon' ? 'Nothing needs drinking soon.' : 'No finished bottles yet.'}</p>`;
   return shell(`
     <div class="stats"><div><b>${count}</b><span>bottles</span></div><div><b>${inCellar.length}</b><span>wines</span></div><div><b>${esc(money(value) || '–')}</b><span>value</span></div></div>
@@ -930,7 +933,7 @@ async function viewBottle(id) {
         <button data-act="bottleQty" data-d="1" aria-label="One more">+</button>
       </div>
     </div>
-    <button class="btn primary big-btn" data-act="openBottle" ${b.qty > 0 ? '' : 'disabled'}>🍷 Open a bottle and taste it</button>
+    <button class="btn primary big-btn" data-act="openBottle" ${b.qty > 0 ? '' : 'disabled'}>${icon('glass', 18)} Open a bottle and taste it</button>
     <div class="card"><dl class="facts">${rows.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}
       ${m ? `<dt>Merchant</dt><dd><a href="#/merchant/${m.id}">${esc(m.name)}</a></dd>` : ''}</dl>
       ${b.notes ? `<p class="small">${esc(b.notes)}</p>` : ''}</div>
@@ -938,7 +941,7 @@ async function viewBottle(id) {
     ${tastings.length ? tastings.map((w) => `<a class="card st-row" href="#/wine/${w.id}"><span class="st-name">${esc(fmtDate(w.date))}${w.place ? `<br><span class="muted small">${esc(w.place)}</span>` : ''}</span><span class="st-score">${w.tasting && w.tasting.score != null && w.tasting.score !== '' ? esc(formatScore(w.tasting.score, w.scale || 100)) : ''}</span></a>`).join('') : '<p class="muted small">None yet. Opening a bottle starts a tasting in My Wines.</p>'}
     ${(b.log || []).length ? `<div class="field-label">History</div><ul class="log">${b.log.map((l, i) => ({ l, i })).reverse().slice(0, 12).map(({ l, i }) => `<li><span class="muted small">${esc(fmtDate(l.date))}</span> ${esc(l.note)}<button class="log-del" data-act="delLog" data-i="${i}" aria-label="Delete entry">✕</button></li>`).join('')}</ul>` : ''}
     <button class="btn danger" data-act="deleteBottle" data-id="${id}">Delete from cellar</button>
-  `, { title: 'Bottle', back: '#/cellar', actions: `<a class="icon-btn" href="#/bottle/${id}/edit" aria-label="Edit">✎</a>` });
+  `, { title: 'Bottle', back: '#/cellar', actions: `<a class="icon-btn" href="#/bottle/${id}/edit" aria-label="Edit">${icon('pencil', 20)}</a>` });
 }
 
 // ---------- merchants
@@ -967,7 +970,7 @@ async function viewMerchants() {
         <div class="ec-meta">${s ? `<span class="pill">${s.n} bottle${s.n === 1 ? '' : 's'}</span>${s.spent ? `<span class="muted small">${esc(money(s.spent))}</span>` : ''}` : '<span class="muted small">no purchases</span>'}</div>
       </a>`;
   }).join('');
-  const empty = `<div class="empty"><div class="empty-icon">🏪</div><p><b>No merchants yet.</b></p><p class="muted">Keep the shops, importers and producers you buy from: contacts, what you bought there and what you paid.</p></div>`;
+  const empty = `<div class="empty"><div class="empty-icon">${engraving('shop')}</div><p><b>No merchants yet.</b></p><p class="muted">Keep the shops, importers and producers you buy from: contacts, what you bought there and what you paid.</p></div>`;
   return shell(`${ms.length ? cards : empty}<a class="fab" href="#/merchant/new">+ New merchant</a>`, { title: 'Merchants', tab: 'merchants' });
 }
 
@@ -998,10 +1001,10 @@ async function viewMerchant(id) {
   const s = (await merchantStats())[id] || { n: 0, spent: 0, bottles: [] };
   const site = m.website && /^https?:\/\//i.test(m.website) ? m.website : (m.website ? 'https://' + m.website : '');
   const links = [
-    m.phone ? `<a class="btn" href="tel:${attr(m.phone.replace(/\s/g, ''))}">📞 Call</a>` : '',
-    m.email ? `<a class="btn" href="mailto:${attr(m.email)}">✉️ Email</a>` : '',
-    site ? `<a class="btn" href="${attr(site)}" target="_blank" rel="noopener">🌐 Website</a>` : '',
-    m.address || m.city ? `<a class="btn" href="${mapURL({ place: [m.name, m.address, m.city].filter(Boolean).join(', ') })}" target="_blank" rel="noopener">📍 Map</a>` : '',
+    m.phone ? `<a class="btn" href="tel:${attr(m.phone.replace(/\s/g, ''))}">${icon('phone', 18)} Call</a>` : '',
+    m.email ? `<a class="btn" href="mailto:${attr(m.email)}">${icon('mail', 18)} Email</a>` : '',
+    site ? `<a class="btn" href="${attr(site)}" target="_blank" rel="noopener">${icon('globe', 18)} Website</a>` : '',
+    m.address || m.city ? `<a class="btn" href="${mapURL({ place: [m.name, m.address, m.city].filter(Boolean).join(', ') })}" target="_blank" rel="noopener">${icon('pin', 18)} Map</a>` : '',
   ].filter(Boolean);
   const purchases = s.bottles.sort((a, b) => (b.purchaseDate || '').localeCompare(a.purchaseDate || ''));
   return shell(`
@@ -1013,7 +1016,7 @@ async function viewMerchant(id) {
     ${purchases.map((b) => `<a class="card st-row" href="#/bottle/${b.id}"><span class="dot dot-${b.colour || 'none'}"></span><span class="st-name">${esc(wineTitle(b))}<br><span class="muted small">${esc([fmtDate(b.purchaseDate), `${b.bought ?? b.qty ?? 0} × ${money(num(b.price)) || '?'}`].filter(Boolean).join(' · '))}</span></span><span class="muted small">${b.qty || 0} left</span></a>`).join('') || '<p class="muted small">Nothing bought here yet.</p>'}
     <a class="btn primary" href="#/cellar/new/m/${id}">+ Add bottles bought here</a>
     <button class="btn danger" data-act="deleteMerchant" data-id="${id}">Delete merchant</button>
-  `, { title: m.name, back: '#/merchants', actions: `<a class="icon-btn" href="#/merchant/${id}/edit" aria-label="Edit merchant">✎</a>` });
+  `, { title: m.name, back: '#/merchants', actions: `<a class="icon-btn" href="#/merchant/${id}/edit" aria-label="Edit merchant">${icon('pencil', 20)}</a>` });
 }
 
 // ---------- settings
@@ -1051,7 +1054,7 @@ async function viewSettings() {
     <section class="set-sec" id="ai">
       <h2>AI label scan</h2>
       <p class="muted small">Reads producer, wine, vintage, region, grapes and ABV from a label photo, using Claude. It needs your own Anthropic API key (create one at console.anthropic.com, under API keys). The key stays on this device only. It is not part of backups and is sent only to Anthropic. Each scan costs about one US cent.</p>
-      ${apiKey ? `<p class="small">✅ Key saved (…${esc(apiKey.slice(-4))})</p>
+      ${apiKey ? `<p class="small key-ok">${icon('check', 16)} Key saved (…${esc(apiKey.slice(-4))})</p>
         <div class="row2"><button class="btn" data-act="testKey">Test key</button><button class="btn danger" data-act="removeKey">Remove key</button></div>`
         : `<label class="block-label">API key<input id="apiKeyInput" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="sk-ant-…"></label>
         <button class="btn primary" data-act="saveKey">Save key</button>`}
@@ -1481,6 +1484,11 @@ document.addEventListener('input', async (e) => {
       t.scoreTouched = true;
       const other = $app.querySelector(el.dataset.score !== undefined ? '[data-score-range]' : '[data-score]');
       if (other && el.value !== '') other.value = el.value;
+      const dial = $app.querySelector('[data-dial]');
+      if (dial) {
+        const lo = +dial.dataset.min, hi = +dial.dataset.max;
+        dial.style.setProperty('--p', el.value === '' ? 0 : Math.max(0, Math.min(1, (+el.value - lo) / (hi - lo))).toFixed(3));
+      }
     }
     saveWineSoon(w);
     const out = $app.querySelector('#noteOut');

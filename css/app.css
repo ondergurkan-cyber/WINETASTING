@@ -1,34 +1,75 @@
+/* Design system: see DESIGN.md ("The Cellar Almanac"). Fonts are bundled for offline use (fonts/OFL.txt). */
+@font-face { font-family: "Libre Caslon Display"; src: url("../fonts/libre-caslon-display-latin-400-normal.woff2") format("woff2"); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: "Libre Caslon Text"; src: url("../fonts/libre-caslon-text-latin-400-italic.woff2") format("woff2"); font-weight: 400; font-style: italic; font-display: swap; }
+@font-face { font-family: "Josefin Sans"; src: url("../fonts/josefin-sans-latin-600-normal.woff2") format("woff2"); font-weight: 600; font-style: normal; font-display: swap; }
+@font-face { font-family: "Courier Prime"; src: url("../fonts/courier-prime-latin-400-normal.woff2") format("woff2"); font-weight: 400; font-style: normal; font-display: swap; }
+
 :root {
-  --bg: #f7f3ef;
-  --card: #ffffff;
-  --ink: #2a1f22;
-  --muted: #7b6d70;
-  --line: #e6dcd6;
-  --wine: #7b1e3a;
-  --wine-ink: #ffffff;
-  --wine-soft: #f3e2e7;
-  --chip: #f1ebe7;
-  --ok: #3b7d4f;
-  --danger: #b3261e;
-  --white-wine: #e9d98a;
-  --rose-wine: #f0a3a8;
-  --red-wine: #7b1e3a;
-  --shadow: 0 1px 2px rgba(40, 20, 25, 0.06), 0 2px 8px rgba(40, 20, 25, 0.05);
+  /* paper and ink */
+  --bg: #F4ECDF;          /* paper */
+  --card: #FBF6EE;
+  --sunk: #EDE2D1;
+  --ink: #2B1D17;
+  --muted: #5E4B3F;       /* 7.0:1 on paper */
+  --line: #DCCDB6;        /* hairline: dividers only */
+  --edge: #857056;        /* control boundaries, 4.0:1 */
+  /* accents */
+  --wine: #6E1F2E;        /* bordeaux, the one voice */
+  --wine-deep: #561623;
+  --wine-ink: #FBF6EE;
+  --wine-soft: #F1DEDC;
+  --copper: #B5652B;      /* instruments only, not small text */
+  --copper-ink: #8E4A1B;
+  --copper-soft: #EBD3BC;
+  --mustard: #D9A441;
+  --ok: #4F6B3A;
+  --ok-soft: #E2E6D2;
+  --danger: #A3261E;
+  --warn-soft: #F3E1C2;
+  --chip: var(--card);
+  --white-wine: #E6CF7A;
+  --rose-wine: #E7A1A0;
+  --red-wine: #6E1F2E;
+  /* type */
+  --f-display: "Libre Caslon Display", Georgia, "Times New Roman", serif;
+  --f-italic: "Libre Caslon Text", Georgia, serif;
+  --f-label: "Josefin Sans", "Avenir Next", Futura, system-ui, sans-serif;
+  --f-body: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+  --f-date: "Courier Prime", "Courier New", ui-monospace, monospace;
+  /* depth */
+  --shadow: 0 1px 0 rgba(43, 29, 23, 0.04), 0 6px 16px -8px rgba(43, 29, 23, 0.18);
+  --inset: inset 0 1px 2px rgba(43, 29, 23, 0.10);
+  --stamp: 3px 3px 0 var(--wine-deep);
+  --r-xs: 6px; --r-sm: 10px; --r-md: 16px; --r-lg: 24px;
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   color-scheme: light dark;
 }
 @media (prefers-color-scheme: dark) {
+  /* "The Cellar at Night": same hues, candle-lit, flat */
   :root {
-    --bg: #17121a;
-    --card: #221b25;
-    --ink: #f2eaee;
-    --muted: #a9999f;
-    --line: #3a2f3c;
-    --wine: #c2456b;
-    --wine-soft: #3b2230;
-    --chip: #2e2531;
+    --bg: #1A1311;
+    --card: #251C18;
+    --sunk: #120D0B;
+    --ink: #F1E6D6;
+    --muted: #BFAE9A;
+    --line: #3D2F28;
+    --edge: #86705E;
+    --wine: #D9798A;
+    --wine-deep: #B95F70;
+    --wine-ink: #1A1311;
+    --wine-soft: #3A2025;
+    --copper: #D99058;
+    --copper-ink: #D99058;
+    --copper-soft: #3B2A1E;
+    --ok: #9DB57F;
+    --ok-soft: #26301D;
+    --danger: #E5786C;
+    --warn-soft: #3A2C17;
+    --red-wine: #6E1F2E;
     --shadow: none;
+    --inset: none;
+    --stamp: none;
   }
 }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -380,3 +421,291 @@ textarea { resize: vertical; }
 .setup-btn.on { background: var(--wine); color: #fff; }
 .setup-panel { margin-bottom: 12px; display: flex; flex-direction: column; gap: 8px; }
 .setup-panel .field-label { margin-top: 4px; }
+
+/* =====================================================================
+   Retro-vintage skin (DESIGN.md "The Cellar Almanac").
+   Later rules override the base layout rules above.
+   ===================================================================== */
+body { font-family: var(--f-body); line-height: 1.45; background: var(--bg); }
+.ic { display: inline-block; vertical-align: -0.2em; flex: none; }
+:focus-visible { outline: 2px solid var(--wine); outline-offset: 2px; }
+::selection { background: var(--wine-soft); }
+
+/* paper texture: a faint warm grain, light mode only */
+@media (prefers-color-scheme: light) {
+  body { background-image: radial-gradient(rgba(43, 29, 23, 0.035) 1px, transparent 1.2px); background-size: 5px 5px; }
+}
+
+/* ---------- top bar: round icon buttons and a serif title */
+.topbar { grid-template-columns: 44px 1fr 44px; background: color-mix(in srgb, var(--bg) 90%, transparent); border-bottom: 1px solid var(--line); padding-bottom: 10px; }
+.topbar h1 { font-family: var(--f-display); font-weight: 400; font-size: 1.375rem; letter-spacing: -0.005em; }
+.back, .icon-btn, .setup-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 44px; height: 44px; padding: 0; border-radius: 50%;
+  background: var(--card); border: 1px solid var(--line); color: var(--ink); box-shadow: var(--shadow); cursor: pointer;
+}
+.top-actions { display: flex; justify-content: flex-end; min-width: 44px; }
+.setup-btn.on { background: var(--wine); border-color: var(--wine); color: var(--wine-ink); }
+
+/* ---------- tab bar: line icons over spaced caps */
+.tabbar { background: color-mix(in srgb, var(--card) 94%, transparent); border-top: 1px solid var(--line); padding-top: 8px; }
+.tabbar a { font-family: var(--f-label); font-weight: 600; font-size: 0.6875rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); gap: 4px; min-height: 44px; justify-content: center; }
+.tabbar .ti { line-height: 0; }
+.tabbar a.on { color: var(--wine); }
+.tabbar a.on .ic { stroke-width: 2.1; }
+
+/* ---------- type roles */
+.muted { color: var(--muted); }
+.small { font-size: 0.8125rem; }
+.tiny { font-size: 0.75rem; }
+.descriptor { font-family: var(--f-italic); font-style: italic; font-size: 1.0625rem; color: var(--ink); margin: 6px 0 2px; }
+.eyebrow, .sec-title, .set-sec h2, .lex .layer-title, .wheel-name, .g-head, .group-head, .big-card b, .stats span, .field-label, .srow-label, .qp-title {
+  font-family: var(--f-label); font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase;
+}
+.srow-label, .field-label { font-size: 0.75rem; color: var(--ink); }
+.srow-label .muted, .field-label .muted { font-family: var(--f-body); letter-spacing: 0; text-transform: none; font-weight: 400; }
+.group-head { font-size: 0.75rem; color: var(--copper-ink); margin: 22px 2px 10px; display: flex; align-items: center; gap: 10px; }
+.group-head::after { content: ""; flex: 1; border-top: 1px dashed var(--edge); opacity: .6; }
+.group-head .muted { font-family: var(--f-date); letter-spacing: 0.04em; text-transform: none; }
+.set-sec h2 { font-size: 0.75rem; color: var(--copper-ink); margin: 0 2px 10px; }
+
+/* ---------- cards: soft paper */
+.card, .panel, .guess-panel, .sec, .stats > div, .radio-row, .cluster, .search-results:not(:empty) {
+  background: var(--card); border: 1px solid var(--line); border-radius: var(--r-md); box-shadow: var(--shadow);
+}
+.card { padding: 16px; margin-bottom: 12px; }
+.ec-name, .wc-name, .st-name > :first-child { font-weight: 600; }
+.ec-name { font-family: var(--f-display); font-weight: 400; font-size: 1.3125rem; line-height: 1.2; }
+.event-card .muted { font-family: var(--f-date); font-size: 0.8125rem; letter-spacing: 0.02em; }
+.method-badge { font-family: var(--f-date); font-size: 0.8125rem; color: var(--muted); letter-spacing: 0.02em; }
+.method-badge b { font-family: var(--f-body); }
+
+/* pills and badges */
+.pill { font-family: var(--f-label); font-weight: 600; font-size: 0.6875rem; letter-spacing: 0.1em; text-transform: uppercase; padding: 4px 9px 3px; background: var(--sunk); color: var(--muted); }
+.pill-blind { background: var(--wine-soft); color: var(--wine); }
+.pill.win-soon, .pill.win-past { background: var(--warn-soft); color: var(--copper-ink); }
+.pill.win-ready { background: var(--ok-soft); color: var(--ok); }
+.plus-tag, .ai-tag { font-family: var(--f-label); letter-spacing: 0.08em; text-transform: uppercase; }
+.ai-tag { color: var(--ok); background: var(--ok-soft); }
+.ai-tag.warn { color: var(--copper-ink); background: var(--warn-soft); }
+.form label.ai-check input { border-color: var(--copper); box-shadow: 0 0 0 3px var(--warn-soft); }
+.key-ok { display: flex; align-items: center; gap: 6px; color: var(--ok); }
+
+/* ---------- buttons: pills */
+.btn { border-radius: 999px; min-height: 48px; padding: 13px 22px; background: var(--card); border: 1px solid var(--edge); color: var(--ink); display: flex; align-items: center; justify-content: center; gap: 8px; }
+.btn:active { transform: translateY(1px); }
+.btn.primary { background: var(--wine); border-color: var(--wine); color: var(--wine-ink); }
+.btn.primary:active { background: var(--wine-deep); }
+.btn.danger, .danger-link { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 55%, transparent); background: transparent; }
+.small-btn { display: inline-flex; min-height: 36px; padding: 6px 14px; }
+.link, .more-btn, a { color: var(--wine); }
+.big-btn { min-height: 52px; font-size: 1rem; }
+/* the One Stamp: the single main action of the sheet and the cellar */
+.big-btn.primary { box-shadow: var(--stamp); }
+.big-btn.primary:active { box-shadow: 1px 1px 0 var(--wine-deep); transform: translate(2px, 2px); }
+
+.fab { background: var(--wine); color: var(--wine-ink); box-shadow: var(--stamp); border-radius: 999px; padding: 14px 22px; font-weight: 600; }
+.fab:active { box-shadow: 1px 1px 0 var(--wine-deep); transform: translate(2px, 2px); }
+
+/* ---------- inputs: inset wells */
+.form input:not([type=radio]):not([type=checkbox]):not([type=file]), .block-label input, textarea, select, .aroma-search {
+  background: var(--card); border: 1px solid var(--edge); border-radius: var(--r-sm); box-shadow: var(--inset); min-height: 48px; padding: 12px 14px;
+}
+input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
+.form input:focus, textarea:focus, select:focus, .aroma-search:focus { outline: none; border-color: var(--wine); box-shadow: var(--inset), 0 0 0 3px var(--wine-soft); }
+.form label, .block-label { color: var(--muted); }
+.add-own input { border: 1px dashed var(--edge); }
+.add-own button { background: var(--sunk); color: var(--ink); }
+
+/* ---------- segmented controls and chips */
+.seg, .mode-toggle { background: var(--sunk); box-shadow: var(--inset); border-radius: 999px; padding: 4px; }
+.seg span, .seg > button, .seg > a { border-radius: 999px; min-height: 36px; display: flex; align-items: center; justify-content: center; color: var(--muted); font-weight: 600; }
+.seg input:checked + span, .seg > button.on, .seg > a.on, .mode-toggle button.on { background: var(--card); color: var(--ink); box-shadow: var(--shadow); }
+.mode-toggle button { min-height: 32px; color: var(--muted); }
+
+.chip { background: var(--card); border: 1px solid var(--edge); color: var(--ink); min-height: 40px; }
+.chip.on { background: var(--wine); border-color: var(--wine); color: var(--wine-ink); }
+.qp { background: var(--card); border: 1px solid var(--line); color: var(--ink); border-radius: var(--r-sm); }
+.qp.on { background: var(--wine); border-color: var(--wine); color: var(--wine-ink); }
+.count { background: var(--wine); color: var(--wine-ink); }
+.cluster.has { border-color: var(--wine); }
+
+/* switches: a cream knob on a sunk track, sage when on */
+.switch-row i { background: var(--sunk); border: 1px solid var(--edge); box-shadow: var(--inset); }
+.switch-row i::after { top: 2px; left: 2px; background: var(--card); border: 1px solid var(--edge); box-shadow: 0 1px 2px rgba(43, 29, 23, .25); }
+.switch-row input:checked + i { background: var(--ok); border-color: var(--ok); }
+.switch-row input:focus-visible + i { outline: 2px solid var(--wine); outline-offset: 2px; }
+
+.radio-row { border-radius: var(--r-md); padding: 14px; }
+.radio-row input { accent-color: var(--wine); }
+
+/* ---------- choice bars: pills by default */
+.seg-bar { background: transparent; padding: 0; gap: 6px; border-radius: 0; }
+.seg-bar button { background: var(--card); border: 1px solid var(--edge); color: var(--ink); border-radius: 999px; min-height: 40px; padding: 8px 4px; }
+.seg-bar button.on { background: var(--wine); border-color: var(--wine); color: var(--wine-ink); }
+.seg-bar button.sugg { outline: 1.5px dashed var(--copper); outline-offset: 2px; }
+.blic-bar button { background: var(--card); }
+
+/* ---------- the engraved scale: ordered SAT steps as ticks on a rule */
+.seg-bar.scale { position: relative; padding: 16px 0 0; gap: 0; }
+.seg-bar.scale::before { content: ""; position: absolute; left: 0; right: 0; top: 8px; border-top: 1.5px solid var(--edge); }
+.seg-bar.scale button {
+  overflow: visible; text-overflow: clip;
+  position: relative; background: transparent; border: 0; color: var(--muted); border-radius: var(--r-xs);
+  min-height: 40px; padding: 8px 2px 6px; font-family: var(--f-label); font-weight: 600; font-size: 0.6875rem; letter-spacing: 0.06em; text-transform: uppercase;
+}
+.seg-bar.scale button::before { content: ""; position: absolute; left: 50%; top: -12px; width: 1.5px; height: 10px; background: var(--edge); transform: translateX(-50%); }
+.seg-bar.scale button::after { content: ""; position: absolute; left: 0; right: 0; top: -9px; height: 3px; }
+/* the run up to the chosen step fills copper; the chosen step carries the knob */
+.seg-bar.scale:has(button.on) button:not(.on):not(.on ~ button)::after { background: var(--copper); }
+.seg-bar.scale button.on { background: transparent; color: var(--ink); }
+.seg-bar.scale button.on::after { background: var(--copper); right: 50%; }
+.seg-bar.scale button.on::before {
+  top: -16px; width: 18px; height: 18px; border-radius: 50%; z-index: 1;
+  background: var(--card); border: 2px solid var(--copper); box-shadow: 0 1px 2px rgba(43, 29, 23, .3);
+}
+.seg-bar.scale button.sugg { outline-offset: -2px; }
+
+/* structure grid cells */
+.g-cell { background: var(--sunk); box-shadow: var(--inset); border-radius: var(--r-xs); }
+.g-cell.on { background: var(--copper); box-shadow: none; }
+.g-label span { color: var(--copper-ink); }
+
+/* colour tiles */
+.tile { background: var(--card); border: 1px solid var(--edge); color: var(--ink); border-radius: var(--r-sm); position: relative; overflow: hidden; }
+.tile-white, .tile-rose, .tile-red { background: var(--card); color: var(--ink); }
+.tile-white { box-shadow: inset 0 -5px 0 var(--white-wine); }
+.tile-rose { box-shadow: inset 0 -5px 0 var(--rose-wine); }
+.tile-red { box-shadow: inset 0 -5px 0 var(--red-wine); }
+.tile.on { background: var(--wine); color: var(--wine-ink); border-color: var(--wine); }
+
+/* ---------- tasting sheet */
+.sec { padding: 16px; border-radius: var(--r-md); }
+.sec.open { border-color: var(--edge); }
+.sec-title { font-size: 0.75rem; color: var(--copper-ink); letter-spacing: 0.16em; }
+.sec-title.ok { color: var(--ok); }
+.sec-dot { background: var(--ok); }
+.pstrip { background: var(--bg); box-shadow: 0 -10px 0 var(--bg); }
+.pstrip button { font-family: var(--f-label); font-size: 0.6875rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); min-height: 32px; }
+.pstrip i { background: var(--sunk); box-shadow: var(--inset); height: 5px; }
+.pstrip i b { background: var(--copper); }
+.pstrip .part { color: var(--copper-ink); }
+.pstrip .done { color: var(--ok); }
+.stepper button { background: var(--card); border: 1px solid var(--line); }
+.stepper button.part i { background: var(--copper); }
+.stepper button.on { background: var(--wine); color: var(--wine-ink); }
+.plus-box { border-top: 1px dashed var(--edge); }
+.plus-tag { color: var(--wine); background: var(--wine-soft); }
+.wine-sub { font-family: var(--f-date); letter-spacing: 0.02em; }
+.wine-sub .ic { vertical-align: -0.15em; }
+.blic { background: var(--sunk); box-shadow: var(--inset); }
+
+/* the hero dial for the score */
+.dial {
+  --p: 0; position: relative; width: 196px; height: 196px; margin: 10px auto 4px; border-radius: 50%;
+  background:
+    radial-gradient(closest-side, transparent 86%, var(--edge) 86.5% 87.5%, transparent 88%),
+    repeating-conic-gradient(from -135deg, var(--edge) 0 0.6deg, transparent 0.6deg 9deg),
+    conic-gradient(from -135deg, var(--copper) calc(var(--p) * 270deg), var(--sunk) 0 270deg, transparent 0);
+  box-shadow: var(--shadow);
+}
+.dial::before { content: ""; position: absolute; inset: 0; border-radius: 50%; -webkit-mask: radial-gradient(closest-side, transparent 80%, #000 81%); mask: radial-gradient(closest-side, transparent 80%, #000 81%); }
+.dial-face {
+  position: absolute; inset: 14px; border-radius: 50%; background: var(--card); border: 1px solid var(--line); box-shadow: var(--inset);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+}
+.dial-label, .dial-unit { font-family: var(--f-label); font-weight: 600; font-size: 0.6875rem; letter-spacing: 0.16em; text-transform: uppercase; color: var(--copper-ink); }
+.dial-unit { color: var(--muted); }
+.dial input {
+  width: 120px; border: 0; background: transparent; text-align: center; color: var(--ink);
+  font-family: var(--f-display); font-size: 3.5rem; line-height: 1; font-variant-numeric: lining-nums tabular-nums; padding: 0;
+}
+.dial input::placeholder { color: var(--edge); }
+.dial input:focus { outline: none; }
+.dial:focus-within .dial-face { border-color: var(--wine); box-shadow: 0 0 0 3px var(--wine-soft); }
+.score-range { accent-color: var(--copper); }
+
+/* guess and note */
+.big-card { background: var(--card); border: 1px solid var(--line); border-radius: var(--r-md); box-shadow: var(--shadow); color: var(--ink); }
+.big-card.on { background: var(--wine-soft); border-color: var(--wine); }
+.big-card b { font-size: 0.8125rem; letter-spacing: 0.18em; }
+.pct, .wc-score, .st-score { color: var(--wine); font-family: var(--f-display); font-weight: 400; font-size: 1.375rem; font-variant-numeric: lining-nums tabular-nums; }
+.bar { background: var(--sunk); box-shadow: var(--inset); }
+.bar i { background: var(--copper); }
+.note-out { font-family: var(--f-italic); font-style: italic; background: var(--card); border: 1px solid var(--line); box-shadow: var(--inset); }
+.note-box { background: var(--sunk); box-shadow: var(--inset); border-radius: var(--r-md); border-left: 3px solid var(--copper); }
+.reveal-btn { background: var(--wine-soft); color: var(--wine); border-color: var(--wine); }
+
+/* ---------- event screen */
+.hero {
+  background: var(--card); color: var(--ink); border: 1px solid var(--line); border-left: 6px solid var(--wine);
+  border-radius: var(--r-md); box-shadow: var(--shadow); padding: 16px 18px;
+}
+.hero .small { opacity: 1; color: var(--copper-ink); font-family: var(--f-label); font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; font-size: 0.6875rem; }
+.hero b { font-family: var(--f-display); font-weight: 400; font-size: 1.5rem; }
+.hero-arrow { width: 44px; height: 44px; border-radius: 50%; background: var(--wine); color: var(--wine-ink); display: inline-flex; align-items: center; justify-content: center; font-size: 26px; flex: none; box-shadow: var(--stamp); }
+.hero.done { background: var(--card); border-left-color: var(--ok); }
+.hero.done .hero-arrow { background: var(--ok); color: var(--card); box-shadow: none; }
+.quick-add { border-style: dashed; border-color: var(--edge); box-shadow: none; background: transparent; }
+
+/* wine rows: a spine stripe in the wine's colour */
+.wine-card { padding: 10px 10px 10px 14px; position: relative; overflow: hidden; }
+.pos { font-family: var(--f-display); font-weight: 400; font-size: 1.25rem; color: var(--copper-ink); width: 24px; }
+.thumb { border-radius: var(--r-sm); background: var(--sunk); }
+.thumb.ph { color: var(--copper); }
+.thumb.blind { background: var(--wine-soft); color: var(--wine); font-family: var(--f-display); font-size: 1.375rem; font-weight: 400; }
+.reorder button { color: var(--muted); min-width: 36px; min-height: 22px; }
+.row-del { color: var(--danger); min-width: 44px; min-height: 44px; }
+.log-del, .g-del { min-width: 32px; min-height: 32px; }
+.g-del { background: rgba(26, 19, 17, .7); color: #F4ECDF; }
+.g-item, .label-shot img, .reveal-img { border-radius: var(--r-sm); }
+.g-add, .label-ph { border: 1.5px dashed var(--edge); color: var(--muted); gap: 4px; font-size: 0.875rem; border-radius: var(--r-sm); }
+
+/* standings: rank numerals, top three in a ring */
+.st-row .rank { font-family: var(--f-display); font-weight: 400; font-size: 1.375rem; color: var(--muted); width: 36px; height: 36px; display: inline-flex; align-items: center; justify-content: center; flex: none; }
+.st-row .rank.top { border-radius: 50%; border: 1.5px solid var(--copper); color: var(--copper-ink); background: var(--card); box-shadow: inset 0 0 0 3px var(--card), inset 0 0 0 4px var(--copper-soft); }
+.st-row .rank.top1 { border-color: var(--mustard); border-width: 2px; color: var(--ink); }
+.dot { border: 1px solid color-mix(in srgb, var(--ink) 18%, transparent); }
+
+/* cellar and merchants */
+.stats > div { padding: 12px 8px; }
+.stats b { font-family: var(--f-display); font-weight: 400; font-size: 1.625rem; font-variant-numeric: lining-nums tabular-nums; }
+.stats span { font-size: 0.625rem; color: var(--copper-ink); }
+.qty { font-family: var(--f-display); font-weight: 400; font-size: 1.25rem; background: var(--sunk); box-shadow: var(--inset); color: var(--ink); }
+.qty.soon, .qty.past { background: var(--warn-soft); color: var(--copper-ink); }
+.qty-ctl button { width: 44px; height: 44px; border: 1px solid var(--edge); background: var(--card); box-shadow: var(--shadow); }
+.qty-ctl b { font-family: var(--f-display); font-weight: 400; font-size: 1.75rem; }
+.facts dt { font-family: var(--f-label); font-weight: 600; font-size: 0.6875rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); padding-top: 2px; }
+.log li { border-bottom: 1px dashed var(--line); }
+.log .muted { font-family: var(--f-date); }
+.choice-icon { color: var(--copper); width: 52px; height: 52px; border-radius: 50%; background: var(--sunk); box-shadow: var(--inset); display: inline-flex; align-items: center; justify-content: center; }
+.choice b { font-family: var(--f-display); font-weight: 400; font-size: 1.25rem; }
+
+/* empty states: an engraved seal */
+.empty { padding: 40px 20px; }
+.empty-icon { color: var(--copper); line-height: 0; margin-bottom: 8px; }
+.empty b { font-family: var(--f-display); font-weight: 400; font-size: 1.375rem; }
+.empty .muted { max-width: 34ch; margin-left: auto; margin-right: auto; }
+
+/* toast and modal */
+.toast { background: var(--ink); color: var(--bg); border-radius: 999px; }
+.modal { background: rgba(26, 19, 17, .5); }
+.modal-box { background: var(--card); border: 1px solid var(--line); border-radius: var(--r-lg); box-shadow: 0 18px 40px -16px rgba(26, 19, 17, .5); }
+.spin { border-color: var(--sunk); border-top-color: var(--copper); }
+
+@media (prefers-color-scheme: dark) {
+  .dot-red { box-shadow: 0 0 0 1px #D9798A; }
+  .tile-red { box-shadow: inset 0 -5px 0 var(--red-wine), inset 0 -6px 0 #D9798A; }
+  .card, .panel, .guess-panel, .sec, .stats > div, .radio-row, .cluster, .big-card, .hero, .modal-box { box-shadow: none; }
+  .hero.done .hero-arrow { color: var(--bg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition: none !important; animation-duration: 0.01ms !important; }
+}
+
+/* fit five tabs on a phone */
+.tabbar a { letter-spacing: 0.04em; font-size: 0.625rem; }
+@media (min-width: 400px) { .tabbar a { letter-spacing: 0.08em; font-size: 0.6875rem; } }
+.hero-arrow { box-shadow: none; }
+.unscored .st-score { font-family: var(--f-italic); font-style: italic; font-size: 0.9375rem; color: var(--muted); }
