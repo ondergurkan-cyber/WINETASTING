@@ -26,6 +26,8 @@ const P = {
   up: '<path d="m6 15 6-6 6 6"/>',
   down: '<path d="m6 9 6 6 6-6"/>',
   close: '<path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/>',
+  cloud: '<path d="M7 18.5h10.2a3.8 3.8 0 0 0 .6-7.6A5.6 5.6 0 0 0 7 9.6a4.5 4.5 0 0 0 0 8.9Z"/>',
+  sync: '<path d="M19 8.5A7.5 7.5 0 0 0 5.6 7.2"/><path d="M5 4v3.5h3.5"/><path d="M5 15.5a7.5 7.5 0 0 0 13.4 1.3"/><path d="M19 20v-3.5h-3.5"/>',
 };
 
 export function icon(name, size = 24) {

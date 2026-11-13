@@ -2,7 +2,7 @@
 
 A wine tasting app for iPhone and iPad, built around the WSET Systematic Approach to Tasting (SAT).
 
-It is an installable web app (PWA): plain HTML, CSS and JavaScript with no build step. Open it in Safari, tap **Share → Add to Home Screen**, and it runs full screen and offline like a normal app. All data (events, wines, tastings, photos, videos) is stored on the device in IndexedDB.
+It is an installable web app (PWA): plain HTML, CSS and JavaScript with no build step. Open it in Safari, tap **Share → Add to Home Screen**, and it runs full screen and offline like a normal app. All data (events, wines, tastings, photos, videos) is stored on the device in IndexedDB, and, once you sign in, synced across your devices through Supabase.
 
 ## What's in this prototype
 
@@ -15,6 +15,7 @@ It is an installable web app (PWA): plain HTML, CSS and JavaScript with no build
 - **Standings tab on Home** across all events and My Wines, filterable by colour, event or My Wines.
 - **New tasting:** choose **Event** or **Single wine**, or open a bottle from the cellar.
 - **My Wines:** single tastings (a restaurant, a dinner) outside events, grouped by month, each with date, place (plus optional saved location and map link), score scale, photos and the same tasting sheet.
+- **Sync across devices:** sign in under Settings → Your devices on iPhone, iPad and computer. Everything (events, wines, cellar, merchants, photos, settings) syncs through a free Supabase project; the app keeps working offline and catches up when back online. Newest change wins per item. Existing data on each device is merged into the account on first sign-in. One-time setup: `supabase/KURULUM.md` (SQL in `supabase/setup.sql`, keys in `js/config.js`).
 - **AI label scan:** take a label photo and Claude reads producer, wine, vintage, region, country, grapes, ABV, style (and a drinking-window estimate for the cellar). Uncertain fields are marked "check". Uses your own Anthropic API key, entered in Settings, stored only on the device and never exported. Works for event wines (hidden in blind events), single wines and cellar bottles.
 - **Cellar:** bottles you own with quantity, location, price, merchant, purchase date, drinking window ("Drink soon" filter), history log. **Open a bottle and taste it** takes one out and starts a My Wines tasting linked to the bottle.
 - **Merchants:** shops, importers and producers you buy from, with contact links (call, email, website, map), notes, purchases, bottles bought and total spent.
@@ -22,7 +23,6 @@ It is an installable web app (PWA): plain HTML, CSS and JavaScript with no build
 ## Not yet
 
 - Outside scores and prices (Vivino has no public API; a licensed source such as the Wine-Searcher API needs approval). When other people use the app, the AI key should move to a small server.
-- Sync between iPhone and iPad (use Export/Import for now).
 - Guess knowledge base is v0 (~45 classic profiles in `js/profiles.js`), no LLM explanations yet, no accuracy stats.
 
 ## Running it
