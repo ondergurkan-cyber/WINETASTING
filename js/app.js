@@ -1306,7 +1306,7 @@ async function viewSettings() {
       <p class="muted small">Reads producer, wine, vintage, region, grapes and ABV from a label photo, using Claude. It needs your own Anthropic API key (create one at console.anthropic.com, under API keys). The key stays on this device only. It is not part of backups and is sent only to Anthropic. Each scan costs about one US cent.</p>
       ${apiKey ? `<p class="small key-ok">${icon('check', 16)} Key saved (…${esc(apiKey.slice(-4))})</p>
         <div class="row2"><button class="btn" data-act="testKey">Test key</button><button class="btn danger" data-act="removeKey">Remove key</button></div>`
-        : `<label class="block-label">API key<input id="apiKeyInput" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="sk-ant-…"></label>
+        : `<label class="block-label">Anthropic API key<input id="apiKeyInput" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="sk-ant-…"></label>
         <button class="btn primary" data-act="saveKey">Save key</button>`}
       <label class="switch-row"><span><b>Read labels automatically</b><br><span class="muted small">Scan as soon as you take a label photo.</span></span>
         <input type="checkbox" ${settings.autoScan ? 'checked' : ''} data-act-change="autoScan"><i></i></label>
@@ -1736,6 +1736,9 @@ const actions = {
   async saveKey() {
     const v = ($app.querySelector('#apiKeyInput').value || '').trim();
     if (!v) return;
+    // Sync never needs a key from the user; a Supabase key pasted here is the usual mix-up.
+    if (/^sb_|^eyJ/.test(v)) { toast('That is a Supabase key. Sync needs no key, just sign in. Label scan needs an Anthropic key (starts with sk-ant-).'); return; }
+    if (!v.startsWith('sk-ant-')) { toast('Anthropic keys start with sk-ant-. Copy it again from console.anthropic.com.'); return; }
     try { await testKey(v); } catch (e) { toast(e.message); return; }
     apiKey = v; await db.setKV('apiKey', v); toast('Key saved. Label scan is on.'); rerender();
   },

@@ -81,7 +81,7 @@ export async function scanLabel(blob, key) {
     const msg = await errorText(res.clone());
     if (/fallback|beta/i.test(msg)) res = await fetch(API, { method: 'POST', headers: headers(key, false), body: JSON.stringify(body) });
   }
-  if (res.status === 401) throw new Error('The API key was rejected. Check it in Settings.');
+  if (res.status === 401) throw new Error('Anthropic rejected the API key. In Settings, check it is an active key from console.anthropic.com.');
   if (res.status === 429) throw new Error('Too many requests right now. Try again in a minute.');
   if (!res.ok) throw new Error(`Label scan failed: ${await errorText(res)}`);
   const msg = await res.json();
@@ -105,7 +105,7 @@ export async function scanLabel(blob, key) {
 // Cheap check that a key works: list one model (no tokens used).
 export async function testKey(key) {
   const res = await fetch('https://api.anthropic.com/v1/models?limit=1', { headers: headers(key, false) });
-  if (res.status === 401) throw new Error('The key was rejected.');
+  if (res.status === 401) throw new Error('Anthropic rejected this key. It may be mistyped, deleted, or from another service. Make a new one at console.anthropic.com.');
   if (!res.ok) throw new Error(await errorText(res));
   return true;
 }
