@@ -410,8 +410,10 @@ function mapURL(o) {
 }
 
 // ---------- tasting sheet (one page: Look, Smell, Taste, Verdict)
-function ensureTasting(w) {
-  if (!w.tasting) w.tasting = { methodId: settings.method, levelId: settings.level, values: {}, blic: [], mode: settings.mode || 'full' };
+// A new tasting starts from the event's setup (if one was applied) or the Settings defaults.
+function ensureTasting(w, setup) {
+  const d = setup || {};
+  if (!w.tasting) w.tasting = { methodId: d.methodId || settings.method, levelId: d.levelId || settings.level, values: {}, blic: [], mode: d.mode || settings.mode || 'full', advanced: d.advanced ?? !!settings.advanced };
   w.tasting.values = w.tasting.values || {};
   if (!w.tasting.mode) w.tasting.mode = 'full';
   return w.tasting;
@@ -460,12 +462,13 @@ const QUICK_FIELDS = { appearance: ['colour', 'intensityA'], nose: ['aromas'], p
 
 // Fields shown in a section for this wine, tasting mode and settings.
 function sheetFields(level, sec, w, t) {
-  let fs = fieldsFor(level, sec.sat, w, settings, t);
+  let fs = fieldsFor(level, sec.sat, w, { ...settings, advanced: advOf(t) }, t);
   if (t.mode === 'quick') fs = fs.filter((f) => QUICK_FIELDS[sec.sat].includes(f.id));
   return fs;
 }
 
 // Palate flavours default to the nose until the taster edits them.
+const advOf = (t) => t.advanced ?? !!settings.advanced;
 function flavoursOf(t) { return t.values.flavours ?? (t.values.aromas || []).map((a) => ({ ...a })); }
 function derived(t) { return { ...t, values: { ...t.values, flavours: flavoursOf(t) } }; }
 
@@ -687,7 +690,7 @@ async function viewWine(id) {
   const w = await db.get('wines', id);
   if (!w) return shell('<p class="muted center">Wine not found.</p>', { title: 'Wine', back: '#/' });
   const { event, wines, idx } = await wineCtx(w);
-  const t = ensureTasting(w);
+  const t = ensureTasting(w, event.setup);
   const level = getLevel(t.methodId, t.levelId);
   const method = getMethod(t.methodId);
 
@@ -699,13 +702,27 @@ async function viewWine(id) {
 
   const sections = SECTIONS.map((s) => renderSection(s, level, w, t, event, idx, wines)).join('');
   const extras = await wrapExtras(w, t, level, event, idx, wines);
-  const sub = `${method.name} · ${level.name} · ${styleLabel(w)}${event.blind && !w.revealed ? ' · blind' : ''}`;
+  const sub = `${method.name} · ${level.name}${advOf(t) ? ' · Advanced' : ''} · ${styleLabel(w)}${event.blind && !w.revealed ? ' · blind' : ''}`;
   const where = event.single
     ? `<div class="wine-sub small">${[w.place ? (w.lat ? `<a href="${mapURL(w)}" target="_blank" rel="noopener">📍 ${esc(w.place)}</a>` : `📍 ${esc(w.place)}`) : (w.lat ? `<a href="${mapURL(w)}" target="_blank" rel="noopener">📍 map</a>` : ''), esc(fmtDate(w.date)), w.bottleId ? `<a href="#/bottle/${w.bottleId}">from my cellar</a>` : ''].filter(Boolean).join(' · ')}</div>` : '';
   const modeToggle = `<div class="mode-toggle" role="group" aria-label="Mode">
       <button class="${t.mode === 'quick' ? 'on' : ''}" data-act="mode" data-v="quick">Quick</button>
-      <button class="${t.mode !== 'quick' ? 'on' : ''}" data-act="mode" data-v="full">Full SAT</button></div>`;
-  return shell(`<div class="sheet-head"><div class="wine-sub muted small">${esc(sub)}${event.single ? '' : ` · wine ${idx + 1} of ${wines.length}`}</div>${modeToggle}</div>${where}${strip}<div class="sheet">${sections}${extras}</div>`,
+      <button class="${t.mode !== 'quick' ? 'on' : ''}" data-act="mode" data-v="full">Full SAT</button></div>
+      <button class="setup-btn ${ui.setupOpen === w.id ? 'on' : ''}" data-act="setupToggle" aria-label="Tasting setup">⚙︎</button>`;
+  const setup = ui.setupOpen === w.id ? `
+    <div class="panel setup-panel">
+      <div class="srow-label">Tasting setup <span class="muted small">· this wine</span></div>
+      <div class="field-label">${esc(method.name)} level</div>
+      <div class="seg-bar" style="grid-template-columns: repeat(${method.levels.length}, minmax(0, 1fr))">${method.levels.map((l) => `<button class="${t.levelId === l.id ? 'on' : ''}" data-act="setupLevel" data-v="${l.id}">${esc(l.short || l.name.replace('Level ', 'L').replace(/ \(.*\)/, ''))}</button>`).join('')}</div>
+      <div class="field-label">Mode</div>
+      <div class="seg-bar" style="grid-template-columns: repeat(2, minmax(0, 1fr))"><button class="${t.mode === 'quick' ? 'on' : ''}" data-act="mode" data-v="quick">Quick</button><button class="${t.mode !== 'quick' ? 'on' : ''}" data-act="mode" data-v="full">Full SAT</button></div>
+      <label class="switch-row"><span><b>Advanced</b><br><span class="muted small">Beyond Flavour extras (acid shape, tannin texture…). Not part of the WSET SAT.</span></span>
+        <input type="checkbox" ${advOf(t) ? 'checked' : ''} data-act-change="wineAdvanced"><i></i></label>
+      ${event.single ? '' : `<button class="btn" data-act="setupApplyEvent">Use for all wines in this event</button>`}
+      <button class="btn" data-act="setupDefault">Make this my default</button>
+      <p class="muted tiny">Taps you already made are kept. Changing level only changes which lines you see.</p>
+    </div>` : '';
+  return shell(`<div class="sheet-head"><div class="wine-sub muted small">${esc(sub)}${event.single ? '' : ` · wine ${idx + 1} of ${wines.length}`}</div>${modeToggle}</div>${setup}${where}${strip}<div class="sheet">${sections}${extras}</div>`,
     { title: displayName(w, event, idx), back: backFor(w), actions: (!event.blind || w.revealed) ? `<a class="icon-btn" href="${editFor(w)}" aria-label="Wine details">✎</a>` : '' });
 }
 
@@ -1157,6 +1174,31 @@ const actions = {
     rerender();
   },
   async mode(el) { await withWine((w, t) => { t.mode = el.dataset.v; }); },
+  async setupToggle() { const id = currentWineId(); ui.setupOpen = ui.setupOpen === id ? null : id; rerender(); },
+  async setupLevel(el) { await withWine((w, t) => { t.levelId = el.dataset.v; }); },
+  async setupApplyEvent() {
+    await flushWine();
+    const w = await db.get('wines', currentWineId());
+    const t = w.tasting;
+    const setup = { methodId: t.methodId, levelId: t.levelId, mode: t.mode, advanced: advOf(t) };
+    const ev = await db.get('events', w.eventId);
+    if (!ev) return;
+    ev.setup = setup; await db.put('events', ev);
+    for (const x of await db.byIndex('wines', 'eventId', ev.id)) {
+      if (!x.tasting) continue; // not started yet: picks up the event setup when opened
+      Object.assign(x.tasting, { levelId: setup.levelId, mode: setup.mode, advanced: setup.advanced });
+      await db.put('wines', x);
+    }
+    toast('All wines in this event use this setup');
+    rerender();
+  },
+  async setupDefault() {
+    await flushWine();
+    const t = (await db.get('wines', currentWineId())).tasting;
+    settings.method = t.methodId; settings.level = t.levelId; settings.mode = t.mode; settings.advanced = advOf(t);
+    await saveSettings();
+    toast('Saved as your default for new tastings');
+  },
   async unfold(el) { ui.unfold[el.dataset.k] = true; rerender(); },
   async fold(el) { ui.unfold[el.dataset.k] = false; rerender(); },
   async plusOpen(el) { ui.open['plus' + el.dataset.k] = true; rerender(); },
@@ -1395,6 +1437,7 @@ const changeActions = {
   async noteFormat(el) { settings.noteFormat = el.value; ui.noteFormat = null; await saveSettings(); },
   async defaultMode(el) { settings.mode = el.value; await saveSettings(); },
   async standingsFilter(el) { ui.standingsFilter = el.value; rerender(); },
+  async wineAdvanced(el) { await withWine((w, t) => { t.advanced = el.checked; }); },
   async showTannin(el) { await withWine((w, t) => { t.showTannin = el.checked; }); },
   async autoScan(el) { settings.autoScan = el.checked; await saveSettings(); },
   async currency(el) { settings.currency = el.value.trim(); await saveSettings(); },
