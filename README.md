@@ -1,6 +1,6 @@
-# Tasting
+# VinoKit
 
-A wine tasting app for iPhone and iPad, built around the WSET Systematic Approach to Tasting (SAT).
+VinoKit (working name) is a wine assistant app for iPhone and iPad, built around the WSET Systematic Approach to Tasting (SAT).
 
 It is an installable web app (PWA): plain HTML, CSS and JavaScript with no build step. Open it in Safari, tap **Share → Add to Home Screen**, and it runs full screen and offline like a normal app. All data (events, wines, tastings, photos, videos) is stored on the device in IndexedDB, and, once you sign in, synced across your devices through Supabase.
 

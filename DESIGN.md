@@ -1,5 +1,5 @@
 ---
-name: Tasting
+name: VinoKit
 description: An elegant retro-vintage wine tasting book for iPhone and iPad
 colors:
   paper: "#F4ECDF"
