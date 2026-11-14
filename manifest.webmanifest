@@ -1,7 +1,7 @@
 {
-  "name": "Tasting",
-  "short_name": "Tasting",
-  "description": "Wine tasting notes with the WSET Systematic Approach to Tasting",
+  "name": "VinoKit",
+  "short_name": "VinoKit",
+  "description": "VinoKit: wine tastings with the WSET Systematic Approach to Tasting, cellar and merchants",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

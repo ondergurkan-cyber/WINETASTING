@@ -108,7 +108,7 @@ function shell(content, { title, back, tab, actions = '' } = {}) {
   return `
     <header class="topbar">
       ${back ? `<a class="back" href="${back}" aria-label="Back">${icon('back', 22)}</a>` : syncMark()}
-      <h1 tabindex="-1">${esc(title || 'Tasting')}</h1>
+      <h1 tabindex="-1">${esc(title || 'VinoKit')}</h1>
       <div class="top-actions">${actions || (tab ? `<a class="icon-btn" href="#/settings" aria-label="Settings">${icon('gear', 20)}</a>` : '')}</div>
     </header>
     <main class="${[tab ? 'with-tabs' : '', tab === 'home' ? 'home' : ''].join(' ').trim()}">${content}</main>
@@ -248,7 +248,7 @@ async function viewHome() {
         <a class="card choice" href="#/cellar/new"><span class="choice-icon">${icon('bottle', 26)}</span><span><b>Add bottles</b><br><span class="muted small">What you own, where it sits, when to drink it.</span></span></a>
         <a class="card choice" href="#/merchant/new"><span class="choice-icon">${icon('shop', 26)}</span><span><b>Add a merchant</b><br><span class="muted small">The shops and importers you buy from.</span></span></a>
       </div>
-    `, { title: 'Home', tab: 'home' });
+    `, { title: 'VinoKit', tab: 'home' });
   }
 
   // ---- needs you
@@ -399,7 +399,7 @@ async function viewHome() {
       <div class="home-col">${top}${taste}</div>
     </div>
     <a class="fab" href="#/new">+ New tasting</a>
-  `, { title: 'Home', tab: 'home' });
+  `, { title: 'VinoKit', tab: 'home' });
 }
 
 // ---------- new tasting: event or single wine

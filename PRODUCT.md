@@ -18,7 +18,7 @@ Wine enthusiasts and wine students who taste seriously: people preparing for or 
 
 ## Product Purpose
 
-A personal wine assistant. The tasting module (first and most developed) records tastings with the WSET Systematic Approach to Tasting at Level 2, Level 3 or Diploma (Level 4), alone or in events. Success means a tasting note that is quick to enter at the table, faithful to the official SAT, and useful later for learning, comparing and remembering.
+VinoKit (working name) is a personal wine assistant. The tasting module (first and most developed) records tastings with the WSET Systematic Approach to Tasting at Level 2, Level 3 or Diploma (Level 4), alone or in events. Success means a tasting note that is quick to enter at the table, faithful to the official SAT, and useful later for learning, comparing and remembering.
 
 ## Positioning
 
