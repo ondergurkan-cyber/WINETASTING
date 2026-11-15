@@ -504,6 +504,78 @@ function standingsList(rows, scaleOf) {
   return li + un || '<p class="muted center">No wines yet.</p>';
 }
 
+// ---- event wine list: stacked cards (producer / name / year · grape), optional grouping,
+// long-press drag and swipe actions (wired up in the "wine list gestures" section below)
+const GROUPS = [['order', 'Order'], ['producer', 'Producer'], ['year', 'Year'], ['colour', 'Colour'], ['grape', 'Grape']];
+const COLOUR_ORDER = { white: 0, rose: 1, red: 2 };
+const splitGrapes = (g) => String(g || '').split(/[,/&+]| and | ve /i).map((x) => x.trim()).filter(Boolean);
+function groupKeys(w, by, hidden) {
+  if (hidden) return [['~hidden', 'Hidden until the reveal']];
+  if (by === 'producer') return [[w.producer ? 'a' + w.producer.toLocaleLowerCase('tr') : '~', w.producer || 'Producer not set']];
+  if (by === 'year') { const v = String(w.vintage || '').trim(); return [[/^\d{4}$/.test(v) ? 'a' + v : (v ? 'b' + v : '~'), v || 'Year not set']]; }
+  if (by === 'colour') return [[w.colour ? String(COLOUR_ORDER[w.colour] ?? 3) : '~', w.colour ? COLOUR_LABEL[w.colour] : 'Colour not set']];
+  const gs = splitGrapes(w.grapes);
+  return gs.length ? gs.map((g) => ['a' + g.toLocaleLowerCase('tr'), g]) : [['~', 'Grape not set']];
+}
+function wineCard(w, i, event, { by, editing, ordered }) {
+  const hidden = event.blind && !w.revealed;
+  const t = w.tasting;
+  const done = t && t.done;
+  const status = !t ? 'not started' : (done ? '' : 'tasting');
+  const thumb = !hidden ? (w.labelId ? `<img class="thumb" data-media="${w.labelId}" alt="">` : `<div class="thumb ph">${icon('bottle', 22)}</div>`) : `<div class="thumb ph blind">${i + 1}</div>`;
+  const score = t && t.score != null && t.score !== '' ? t.score : null;
+  const meta = hidden ? [esc(styleLabel(w))] : [w.vintage ? `<span class="wc-yr">${esc(w.vintage)}</span>` : '', esc(w.grapes || styleLabel(w))];
+  if (status) meta.push(`<i>${status}</i>`);
+  const nameOnly = !hidden && !w.name; // no wine name: the producer (or a placeholder) takes the big line
+  const name = hidden ? `Wine ${i + 1}` : (w.name || w.producer || 'Unnamed wine');
+  const prod = !hidden && !nameOnly && w.producer && by !== 'producer' ? `<span class="wc-prod">${esc(w.producer)}</span>` : '';
+  const right = editing
+    ? `<span class="wc-edit"><button class="del" data-act="deleteWine" data-id="${w.id}" aria-label="Delete wine ${i + 1}">${icon('trash', 20)}</button>${ordered ? `<span class="wc-move"><button data-act="moveWine" data-id="${w.id}" data-dir="-1" aria-label="Move wine ${i + 1} up">${icon('up', 20)}</button><button data-act="moveWine" data-id="${w.id}" data-dir="1" aria-label="Move wine ${i + 1} down">${icon('down', 20)}</button></span>` : ''}</span>`
+    : `<span class="wc-score">${score != null ? `<span class="sc"><b>${esc(score)}</b><small>/${event.scale === 20 ? 20 : 100}</small></span>` : ''}${done ? `<span class="wc-done" aria-label="done">${icon('check', 16)}</span>` : ''}</span>`;
+  return `
+    <div class="wrow${editing ? ' editing' : ''}" data-wid="${w.id}">
+      <div class="wrow-acts" aria-hidden="true">
+        <a href="#/event/${event.id}/wine/${w.id}/edit" tabindex="-1">${icon('pencil', 20)}<span>Edit</span></a>
+        <button data-act="shareWine" data-id="${w.id}" tabindex="-1">${icon('share', 20)}<span>Share</span></button>
+        <button class="del" data-act="deleteWine" data-id="${w.id}" tabindex="-1">${icon('trash', 20)}<span>Delete</span></button>
+      </div>
+      <div class="card wine-card">
+        <a class="wc-link" href="#/wine/${w.id}" draggable="false">
+          <span class="pos">${i + 1}</span>
+          ${thumb}
+          <span class="wc-main">${prod}<span class="wc-name">${esc(name)}</span><span class="wc-meta"><span class="dot dot-${w.colour || 'none'}"></span>${meta.filter(Boolean).join(' · ')}</span></span>
+        </a>
+        ${right}
+      </div>
+    </div>`;
+}
+function wineList(event, wines) {
+  if (!wines.length) return `<div class="empty"><p><b>No wines yet.</b></p><p class="muted">Tap a style below to add wine 1. Add them in the order you'll taste them.</p></div>`;
+  const by = GROUPS.some(([k]) => k === settings.listGroup) ? settings.listGroup : 'order';
+  const editing = ui.editList === event.id;
+  const ordered = by === 'order';
+  const head = `
+    <div class="wl-head">
+      <span class="caps">${plural(wines.length, 'wine')}${ordered ? ' · in tasting order' : ''}</span>
+      <button class="link wl-edit" data-act="editList" aria-pressed="${editing}">${editing ? 'Done' : 'Edit'}</button>
+    </div>
+    <div class="chips wl-group" role="group" aria-label="Group wines by">${GROUPS.map(([k, l]) => `<button class="chip${by === k ? ' on' : ''}" data-act="listGroup" data-v="${k}" aria-pressed="${by === k}">${l}</button>`).join('')}</div>
+    ${ordered ? `<p class="wl-hint">${editing ? 'Use the arrows to move a wine, or the bin to delete it.' : 'Hold a wine to drag it to a new place. Swipe left to edit, share or delete.'}</p>` : `<p class="wl-hint">Grouped view. Switch to Order to move wines.</p>`}`;
+  if (ordered) return head + `<div class="wl" data-sortable="${event.id}">${wines.map((w, i) => wineCard(w, i, event, { by, editing, ordered })).join('')}</div>`;
+  const groups = new Map();
+  wines.forEach((w, i) => {
+    for (const [key, label] of groupKeys(w, by, event.blind && !w.revealed)) {
+      if (!groups.has(key)) groups.set(key, { label, rows: [] });
+      groups.get(key).rows.push(wineCard(w, i, event, { by, editing, ordered }));
+    }
+  });
+  return head + [...groups.entries()].sort(([a], [b]) => (a[0] === '~') - (b[0] === '~') || a.localeCompare(b, 'tr', { numeric: true })).map(([, g]) => `
+    <section class="wl-section">
+      <h3 class="wl-gh"><span>${esc(g.label)}</span><span class="caps">${plural(g.rows.length, 'wine')}</span></h3>
+      <div class="wl">${g.rows.join('')}</div>
+    </section>`).join('');
+}
+
 async function viewEvent(id) {
   const { event, wines } = await loadEvent(id);
   if (!event) return shell('<p class="muted center">Event not found.</p>', { title: 'Event', back: '#/events' });
@@ -515,28 +587,7 @@ async function viewEvent(id) {
     const hero = wines.length ? (nextW
       ? `<a class="hero" href="#/wine/${nextW.id}"><span><span class="small">${doneN} of ${wines.length} tasted</span><b>Taste wine ${wines.indexOf(nextW) + 1}</b></span><span class="hero-arrow">›</span></a>`
       : `<div class="hero done"><span><span class="small">All ${wines.length} tasted</span><b>See the standings</b></span><button class="hero-arrow" data-act="eventTab" data-tab="standings" aria-label="Standings">›</button></div>`) : '';
-    body = hero + wines.map((w, i) => {
-      const t = w.tasting;
-      const status = !t ? 'not started' : (t.done ? 'done ✓' : 'tasting');
-      const thumb = !event.blind || w.revealed ? (w.labelId ? `<img class="thumb" data-media="${w.labelId}" alt="">` : `<div class="thumb ph">${icon('bottle', 22)}</div>`) : `<div class="thumb ph blind">${i + 1}</div>`;
-      return `
-        <div class="card wine-card">
-          <a class="wc-link" href="#/wine/${w.id}">
-            <span class="pos">${i + 1}</span>
-            ${thumb}
-            <span class="wc-main">
-              <span class="wc-name">${esc(displayName(w, event, i))}</span>
-              <span class="muted small"><span class="dot dot-${w.colour || 'none'}"></span>${esc(styleLabel(w))} · ${status}</span>
-            </span>
-            <span class="wc-score">${t && t.score != null && t.score !== '' ? esc(formatScore(t.score, event.scale)) : ''}</span>
-          </a>
-          ${ui.editList === id ? `<button class="row-del" data-act="deleteWine" data-id="${w.id}" aria-label="Delete wine ${i + 1}">${icon('trash', 20)}</button>` : `<span class="reorder">
-            <button data-act="moveWine" data-id="${w.id}" data-dir="-1" ${i === 0 ? 'disabled' : ''} aria-label="Move up">${icon('up', 16)}</button>
-            <button data-act="moveWine" data-id="${w.id}" data-dir="1" ${i === wines.length - 1 ? 'disabled' : ''} aria-label="Move down">${icon('down', 16)}</button>
-          </span>`}
-        </div>`;
-    }).join('') || `<div class="empty"><p><b>No wines yet.</b></p><p class="muted">Tap a style below to add wine 1. Add them in the order you'll taste them.</p></div>`;
-    body += `<div class="list-tools">${wines.length ? `<button class="link" data-act="editList">${ui.editList === id ? 'Done' : 'Delete wines…'}</button>` : '<span></span>'}<button class="link danger-link" data-act="deleteEvent">Delete event</button></div>`;
+    body = hero + wineList(event, wines);
     body += `<div class="card quick-add"><div class="srow-label">Quick add <span class="muted small">· tap a style, wine ${wines.length + 1} is added</span></div>${styleTiles({}, 'quickAdd')}<div class="muted tiny">Label photo and details can be added later${event.blind ? ' or at the reveal' : ''}.</div></div>`;
     body += `<a class="fab" href="#/event/${id}/add">+ Add with label</a>`;
   } else if (tab === 'standings') {
@@ -1625,11 +1676,24 @@ const actions = {
   async moveWine(el) {
     const { wines } = await loadEvent(currentEventId());
     const i = wines.findIndex((w) => w.id === el.dataset.id);
-    const j = i + +el.dataset.dir;
-    if (j < 0 || j >= wines.length) return;
-    [wines[i], wines[j]] = [wines[j], wines[i]];
-    for (let k = 0; k < wines.length; k++) { wines[k].order = k; await db.put('wines', wines[k]); }
-    rerender();
+    await moveWineTo(el.dataset.id, i + +el.dataset.dir);
+  },
+  async listGroup(el) { settings.listGroup = el.dataset.v; await saveSettings(); rerender(); },
+  async shareWine(el) {
+    closeSwipe();
+    const w = await db.get('wines', el.dataset.id);
+    if (!w) return;
+    const event = w.eventId ? await db.get('events', w.eventId) : null;
+    const t = w.tasting;
+    const hidden = event && event.blind && !w.revealed;
+    const title = hidden ? 'A blind wine' : [w.producer, w.name, w.vintage].filter(Boolean).join(' ') || 'A wine';
+    const lines = [title];
+    if (t && t.score != null && t.score !== '') lines.push(formatScore(t.score, event ? event.scale : settings.scale));
+    if (t && !hidden) { try { const n = generateNote('short', w, derived(t), getLevel(t.methodId, t.levelId), event); if (n) lines.push(n); } catch (e) { /* no note yet */ } }
+    if (event) lines.push([event.name, fmtDate(event.date)].filter(Boolean).join(' · '));
+    const text = lines.join('\n');
+    if (navigator.share) { try { await navigator.share({ text }); } catch (e) { /* cancelled */ } return; }
+    try { await navigator.clipboard.writeText(text); toast('Copied to share'); } catch (e) { toast('Sharing is not available here'); }
   },
   async delMedia(el) {
     if (!(await ask('Delete this photo or video?', 'Delete'))) return;
@@ -1855,6 +1919,119 @@ const changeActions = {
   async currency(el) { settings.currency = el.value.trim(); await saveSettings(); },
 };
 
+// ---------------------------------------------------------------- wine list gestures
+// Hold a wine for a moment to drag it to a new place in the tasting order.
+// Swipe a wine left to reveal Edit / Share / Delete. Edit mode keeps arrow buttons for VoiceOver.
+const ACTS_W = 216;
+let gest = null, openRow = null, swallowUntil = 0;
+const swallowNextClick = () => { swallowUntil = Date.now() + 450; };
+function closeSwipe() {
+  if (!openRow) return;
+  openRow.querySelector('.wine-card').style.transform = '';
+  openRow.classList.remove('open');
+  openRow = null;
+}
+document.addEventListener('pointerdown', (e) => {
+  const card = e.target.closest('.wrow:not(.editing) .wine-card');
+  if (openRow && !e.target.closest('.wrow-acts') && (!card || card.parentElement !== openRow)) {
+    closeSwipe();
+    if (card) { swallowNextClick(); return; } // first tap only closes the open row
+  }
+  if (!card || e.button > 0) return;
+  const row = card.parentElement;
+  gest = { row, card, x: e.clientX, y: e.clientY, id: e.pointerId, mode: 'wait', base: row.classList.contains('open') ? -ACTS_W : 0, dx: 0 };
+  const list = row.closest('[data-sortable]');
+  if (list && list.children.length > 1) gest.timer = setTimeout(startDrag, 450);
+});
+document.addEventListener('pointermove', (e) => {
+  const g = gest;
+  if (!g || e.pointerId !== g.id) return;
+  const dx = e.clientX - g.x, dy = e.clientY - g.y;
+  if (g.mode === 'wait') {
+    if (Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy)) { clearTimeout(g.timer); g.mode = 'swipe'; g.card.classList.add('swiping'); }
+    else if (Math.abs(dy) > 10) { clearTimeout(g.timer); gest = null; return; }
+  }
+  if (g.mode === 'swipe') {
+    g.dx = Math.max(-ACTS_W - 24, Math.min(0, g.base + dx));
+    g.card.style.transform = `translateX(${g.dx}px)`;
+  } else if (g.mode === 'drag') dragMove(g, e.clientY);
+});
+function endGesture(e) {
+  const g = gest;
+  if (!g || e.pointerId !== g.id) return;
+  clearTimeout(g.timer);
+  gest = null;
+  if (g.mode === 'swipe') {
+    swallowNextClick();
+    g.card.classList.remove('swiping');
+    if (g.dx < -ACTS_W / 3) {
+      if (openRow && openRow !== g.row) closeSwipe();
+      g.card.style.transform = `translateX(${-ACTS_W}px)`;
+      g.row.classList.add('open');
+      openRow = g.row;
+    } else {
+      g.card.style.transform = '';
+      g.row.classList.remove('open');
+      if (openRow === g.row) openRow = null;
+    }
+  } else if (g.mode === 'drag') dropDrag(g);
+}
+document.addEventListener('pointerup', endGesture);
+document.addEventListener('pointercancel', endGesture);
+// keep the page still while a wine is being dragged or swiped
+document.addEventListener('touchmove', (e) => { if (gest && gest.mode !== 'wait') e.preventDefault(); }, { passive: false });
+document.addEventListener('contextmenu', (e) => { if (e.target.closest('.wine-card')) e.preventDefault(); });
+document.addEventListener('click', (e) => {
+  if (Date.now() < swallowUntil && e.target.closest('.wrow')) { swallowUntil = 0; e.preventDefault(); e.stopPropagation(); }
+}, true);
+function startDrag() {
+  const g = gest;
+  if (!g || g.mode !== 'wait') return;
+  closeSwipe();
+  g.mode = 'drag';
+  const list = g.row.parentElement;
+  g.rows = [...list.children];
+  g.from = g.to = g.rows.indexOf(g.row);
+  const gap = parseFloat(getComputedStyle(list).rowGap) || 0;
+  g.h = g.row.getBoundingClientRect().height + gap;
+  g.mids = g.rows.map((r) => { const b = r.getBoundingClientRect(); return b.top + window.scrollY + b.height / 2; });
+  g.scroll0 = window.scrollY;
+  g.lastY = g.y;
+  g.row.classList.add('dragging');
+  list.classList.add('sorting');
+  if (navigator.vibrate) navigator.vibrate(12);
+  g.auto = setInterval(() => {
+    const edge = g.lastY < 90 ? -1 : (g.lastY > window.innerHeight - 120 ? 1 : 0);
+    if (edge) { window.scrollBy(0, edge * 9); dragMove(g, g.lastY); }
+  }, 16);
+}
+function dragMove(g, y) {
+  g.lastY = y;
+  const offset = y - g.y + (window.scrollY - g.scroll0);
+  g.row.style.transform = `translateY(${offset}px) scale(1.02)`;
+  const centre = g.mids[g.from] + offset;
+  let to = g.from;
+  g.mids.forEach((m, k) => { if (k < g.from && centre < m) to = Math.min(to, k); if (k > g.from && centre > m) to = Math.max(to, k); });
+  g.to = to;
+  g.rows.forEach((r, k) => {
+    if (k === g.from) return;
+    const s = g.from < to && k > g.from && k <= to ? -g.h : (g.from > to && k < g.from && k >= to ? g.h : 0);
+    r.style.transform = s ? `translateY(${s}px)` : '';
+    const pos = r.querySelector('.pos');
+    if (pos) pos.textContent = k + 1 + (s < 0 ? -1 : s > 0 ? 1 : 0);
+  });
+  const own = g.row.querySelector('.pos');
+  if (own) own.textContent = to + 1;
+}
+async function dropDrag(g) {
+  clearInterval(g.auto);
+  swallowNextClick();
+  g.row.classList.remove('dragging');
+  g.row.parentElement.classList.remove('sorting');
+  if (g.to !== g.from) { await moveWineTo(g.row.dataset.wid, g.to); toast(`Moved to place ${g.to + 1}`); }
+  else rerender();
+}
+
 document.addEventListener('click', (e) => {
   const el = e.target.closest('[data-act]');
   if (!el || !actions[el.dataset.act]) return;
@@ -2015,6 +2192,17 @@ async function removeMediaOf(owner) {
   for (const m of await db.byIndex('media', 'owner', owner)) await db.del('media', m.id);
 }
 // A wine goes with its label and photos. A cellar bottle it came from is kept.
+// Put one wine at a new place in the tasting order and renumber the rest 1, 2, 3…
+async function moveWineTo(id, to) {
+  const { wines } = await loadEvent(currentEventId());
+  const from = wines.findIndex((w) => w.id === id);
+  if (from < 0 || to < 0 || to >= wines.length || to === from) return;
+  const [w] = wines.splice(from, 1);
+  wines.splice(to, 0, w);
+  for (let k = 0; k < wines.length; k++) if (wines[k].order !== k) { wines[k].order = k; await db.put('wines', wines[k]); }
+  rerender();
+}
+
 async function removeWine(w) {
   await removeMediaOf('wine:' + w.id);
   await removeMediaOf('label:' + w.id);
